@@ -85,6 +85,9 @@ jobs:
           ARCH: ${{ matrix.arch }}
           SIGNED: ${{ needs.prepare.outputs.signed }}
         run: |
+          if [ "$SIGNED" != true ]; then
+            unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+          fi
           if [ "$PLATFORM" = linux ]; then
             npm run dist -- --linux --"$ARCH"
           elif [ "$SIGNED" = true ]; then
