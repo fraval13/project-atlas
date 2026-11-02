@@ -6,6 +6,14 @@ Use Atlas to keep a project notebook, check website availability, follow reposit
 
 ## Install a built package
 
+Download [Atlas 0.1.0 Preview](https://github.com/fraval13/project-atlas/releases/tag/v0.1.0):
+
+- [Windows installer — x64 and ARM64](https://github.com/fraval13/project-atlas/releases/download/v0.1.0/Atlas-0.1.0-windows-setup.exe)
+- [Mac disk image — Intel and Apple Silicon](https://github.com/fraval13/project-atlas/releases/download/v0.1.0/Atlas-0.1.0-mac-universal.dmg)
+- [Linux packages — Debian, Fedora, Arch, and AppImage](https://github.com/fraval13/project-atlas/releases/tag/v0.1.0)
+
+Expand **Assets → Show all assets** on the release page to see every package. These are preview installers; Windows/macOS trust warnings may appear.
+
 Installers include the application runtime. Node.js, npm, and Git are optional for installed copies. Use the package matching your operating system and CPU architecture; a desktop environment and OS libraries are still needed.
 
 | System          | Package        | Installation                                         |
