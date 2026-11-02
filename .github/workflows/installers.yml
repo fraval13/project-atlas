@@ -1,0 +1,146 @@
+name: Build installers and main updates
+on:
+  workflow_dispatch:
+    inputs:
+      signed:
+        description: Require Windows/macOS signing credentials
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    tags: ["v*"]
+permissions:
+  contents: read
+concurrency:
+  group: atlas-installers-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.prepare.outputs.version }}
+      signed: ${{ steps.prepare.outputs.signed }}
+      publish: ${{ steps.prepare.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - id: prepare
+        run: node scripts/prepare-version.cjs
+        env:
+          SIGNED: ${{ inputs.signed || false }}
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+  installers:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+          - os: windows-latest
+            platform: win
+            arch: multi
+          - os: macos-latest
+            platform: mac
+            arch: universal
+    runs-on: ${{ matrix.os }}
+    env:
+      CSC_LINK: ${{ matrix.platform == 'mac' && secrets.MAC_CSC_LINK || matrix.platform == 'win' && secrets.WIN_CSC_LINK || '' }}
+      CSC_KEY_PASSWORD: ${{ matrix.platform == 'mac' && secrets.MAC_CSC_KEY_PASSWORD || matrix.platform == 'win' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install Linux packaging tools
+        if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm libarchive-tools zstd
+      - run: npm ci
+      - name: Apply build version
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
+      - run: npm test
+      - name: Build installers
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          ARCH: ${{ matrix.arch }}
+          SIGNED: ${{ needs.prepare.outputs.signed }}
+        run: |
+          if [ "$PLATFORM" = linux ]; then
+            npm run dist -- --linux --"$ARCH"
+          elif [ "$SIGNED" = true ]; then
+            if [ -z "$CSC_LINK" ]; then
+              echo "Signed builds require the platform signing certificate."
+              exit 1
+            fi
+            if [ "$PLATFORM" = mac ]; then
+              npm run dist -- --mac --universal --config.forceCodeSigning=true
+            else
+              npm run dist -- --win --x64 --arm64 --config.forceCodeSigning=true
+            fi
+          elif [ "$PLATFORM" = mac ]; then
+            npm run dist -- --mac --universal --config.mac.identity=-
+          else
+            npm run dist -- --win --x64 --arm64
+          fi
+      - name: Generate package checksums
+        run: node scripts/checksums.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Atlas-${{ matrix.platform }}-${{ matrix.arch }}
+          if-no-files-found: error
+          path: |
+            release/*.exe
+            release/*.dmg
+            release/*.zip
+            release/*.deb
+            release/*.rpm
+            release/*.pkg.tar.zst
+            release/*.AppImage
+            release/*.blockmap
+            release/main*.yml
+            release/SHA256SUMS.txt
+  publish-main-update:
+    needs: [prepare, installers]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Atlas-*
+          path: release
+          merge-multiple: true
+      - name: Publish complete main update
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          COMMIT: ${{ github.sha }}
+        shell: bash
+        run: |
+          printf 'Atlas main build %s\n\nCommit: %s\n' "$VERSION" "$COMMIT" > release-notes.txt
+          (cd release && sha256sum *.exe *.dmg *.zip *.deb *.rpm *.pkg.tar.zst *.AppImage > SHA256SUMS.txt)
+          gh release create "v$VERSION" --target "$COMMIT" --title "Atlas $VERSION" --notes-file release-notes.txt --prerelease --draft
+          gh release upload "v$VERSION" release/*.exe release/*.dmg release/*.zip release/*.deb release/*.rpm release/*.pkg.tar.zst release/*.AppImage release/*.blockmap release/main*.yml release/SHA256SUMS.txt
+          gh release edit "v$VERSION" --draft=false
