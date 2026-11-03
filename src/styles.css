@@ -1939,6 +1939,69 @@ h3 {
 .startup-item .startup-remedy {
   color: var(--theme-muted, #b4bfd0);
 }
+/* Token setup appears both in the checklist and in Settings. */
+.startup-github-access {
+  display: grid;
+  gap: 13px;
+  width: 100%;
+  max-width: 660px;
+  margin-top: 14px;
+  padding: 16px;
+  background: var(--theme-surface-raised, #192230);
+  border: 1px solid var(--theme-border, #343e50);
+  border-radius: 8px;
+}
+.startup-github-access > .text-button {
+  justify-self: start;
+  padding: 0;
+  text-align: left;
+  line-height: 1.5;
+}
+.startup-token-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+.startup-github-access .startup-token-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  color: var(--theme-muted, #c3cbdc);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.startup-github-access .startup-token-field input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--theme-surface, #0f1521);
+  color: var(--theme-text, #d6dfef);
+  border: 1px solid var(--theme-border, #343e50);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.startup-github-access .startup-token-save {
+  min-height: 40px;
+  white-space: nowrap;
+}
+.startup-item .startup-token-error {
+  margin: 0;
+  color: var(--theme-danger, #f19d9d);
+}
+@media (max-width: 850px) {
+  .startup-token-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .startup-token-save {
+    justify-self: start;
+  }
+}
 .startup-check-list .error-banner {
   margin: 12px 0;
 }

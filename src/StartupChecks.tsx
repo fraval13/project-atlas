@@ -6,6 +6,7 @@ import {
   ChevronRight,
   RefreshCw,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import { GitHubAccessCheck } from "./GitHubAccessCheck";
 import type { API, SystemReport } from "./types";
@@ -19,7 +20,8 @@ export function StartupChecks({
   const [report, setReport] = useState<SystemReport | null>(null),
     [loading, setLoading] = useState(false),
     [error, setError] = useState(""),
-    [expanded, setExpanded] = useState(false);
+    [expanded, setExpanded] = useState(false),
+    [dismissed, setDismissed] = useState(false);
   const listId = useId();
   const running = useRef(false);
   const hadIssue = useRef(false);
@@ -31,8 +33,10 @@ export function StartupChecks({
     setError("");
     try {
       const result = await api!.systemCheck();
-      if (result.checks.some((c) => c.status !== "ready"))
+      if (result.checks.some((c) => c.status !== "ready")) {
         hadIssue.current = true;
+        setDismissed(false);
+      }
       setReport(result);
       if (initial) setExpanded(result.checks.some((c) => c.status !== "ready"));
     } catch (e) {
@@ -47,7 +51,8 @@ export function StartupChecks({
   useEffect(() => {
     void refresh(true);
   }, [api]);
-  if (!available || (!settings && !hadIssue.current)) return null;
+  if (!available || (!settings && (!hadIssue.current || dismissed)))
+    return null;
   const missing = report?.checks.filter((c) => c.status !== "ready") || [],
     required = missing.filter((c) => c.required);
   return (
@@ -86,6 +91,17 @@ export function StartupChecks({
           <RefreshCw size={13} className={loading ? "spin" : ""} />
           {loading ? "Checking…" : "Check again"}
         </button>
+        {!settings && report && !missing.length && !error && !loading && (
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Dismiss setup confirmation"
+            title="Dismiss setup confirmation"
+            onClick={() => setDismissed(true)}
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
       <div className="startup-result" role="status" aria-live="polite">
         {!loading && report && (

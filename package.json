@@ -1,6 +1,6 @@
 {
   "name": "project-atlas",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
@@ -55,5 +55,8 @@
     "type": "git",
     "url": "https://github.com/fraval13/project-atlas.git"
   },
-  "desktopName": "atlas.desktop"
+  "desktopName": "atlas.desktop",
+  "overrides": {
+    "minimatch@>=10 <11": "11.0.1"
+  }
 }

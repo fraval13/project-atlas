@@ -347,6 +347,10 @@ test("startup checklist connects GitHub without opening Settings", async ({
     .fill("test-token");
   await checks.getByRole("button", { name: "Save connection" }).click();
   await expect(checks).toContainText("All checks passed");
+  await checks
+    .getByRole("button", { name: "Dismiss setup confirmation" })
+    .click();
+  await expect(checks).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).connection)).toEqual({
     host: "git.example.com",
     token: "test-token",

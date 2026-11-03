@@ -272,6 +272,7 @@
   font-size: 26px;
   letter-spacing: -0.6px;
 }
+:root[data-theme="retro"] .startup-github-access .startup-token-field input,
 :root[data-theme="retro"] .search,
 :root[data-theme="retro"] .modal :is(input:not([type="checkbox"]), textarea) {
   background: #fff;

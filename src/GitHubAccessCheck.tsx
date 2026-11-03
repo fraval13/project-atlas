@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ExternalLink, KeyRound, Loader2 } from "lucide-react";
 import type { API } from "./types";
 
 export function GitHubAccessCheck({
@@ -42,23 +43,34 @@ export function GitHubAccessCheck({
             .catch(() => setError("Could not open token settings."))
         }
       >
-        Open personal access token settings
+        Open personal access token settings <ExternalLink size={13} />
       </button>
-      <label>
-        Personal access token for {host}
-        <input
-          type="password"
-          autoComplete="off"
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          placeholder="Read-only repository access"
-          required
-        />
-      </label>
-      <button className="secondary" disabled={busy}>
-        {busy ? "Saving…" : "Save connection"}
-      </button>
-      {error && <p role="alert">{error}</p>}
+      <div className="startup-token-controls">
+        <label className="startup-token-field">
+          Personal access token for {host}
+          <input
+            type="password"
+            autoComplete="off"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="Paste your read-only access token"
+            required
+          />
+        </label>
+        <button className="primary startup-token-save" disabled={busy}>
+          {busy ? (
+            <Loader2 size={15} className="spin" />
+          ) : (
+            <KeyRound size={15} />
+          )}
+          {busy ? "Saving…" : "Save connection"}
+        </button>
+      </div>
+      {error && (
+        <p className="startup-token-error" role="alert">
+          {error}
+        </p>
+      )}
     </form>
   );
 }
