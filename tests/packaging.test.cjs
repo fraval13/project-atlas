@@ -64,3 +64,33 @@ test("package contents are explicitly limited to application code and assets", (
   ]);
   assert.equal(config.asar, true);
 });
+
+test("template file lists and temporary cleanup work with patched minimatch", async () => {
+  const { createRequire } = require("node:module");
+  const fromSquirrel = createRequire(
+    require.resolve("electron-builder-squirrel-windows/package.json"),
+  );
+  const fromInstaller = createRequire(
+    fromSquirrel.resolve("electron-winstaller/package.json"),
+  );
+  const temp = fromInstaller("temp");
+  const root = temp.mkdirSync("atlas-legacy-glob-");
+  try {
+    await fs.writeFile(path.join(root, "one.txt"), "test");
+    const fromEjs = createRequire(require.resolve("ejs/package.json"));
+    const fromJake = createRequire(fromEjs.resolve("jake/package.json"));
+    const { FileList } = fromJake("filelist");
+    const files = new FileList();
+    files.include(path.join(root, "*.txt"));
+    assert.equal(files.toArray().length, 1);
+    const fromTemp = createRequire(fromInstaller.resolve("temp/package.json"));
+    await new Promise((resolve, reject) =>
+      fromTemp("rimraf")(root, {}, (error) =>
+        error ? reject(error) : resolve(),
+      ),
+    );
+    await assert.rejects(fs.access(root));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});

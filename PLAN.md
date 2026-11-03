@@ -75,3 +75,5 @@ OAuth/device authorization, configurable monitoring schedules, encrypted peer-to
 - Parse bounded npm, Composer, NuGet, Maven/Gradle, Python, Rust, Go, Ruby and Docker manifests on device, with GitHub URL previews and an optional selected-folder scan. No AI or project execution.
 
 - Publish manual preview releases from successful tag-build artifacts, verifying commit identity, checksums and all platform packages before publishing; retain signing requirements for automatic main releases.
+
+- Per-project refresh must refresh the enabled dependency inventory and recalculate vulnerability findings, without refreshing other projects. Retain previous inventory with a visible error if access fails.

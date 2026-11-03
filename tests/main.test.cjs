@@ -105,7 +105,36 @@ test("desktop bridge persists notes/inventory, excludes credentials, rejects for
     Notification: { isSupported: () => false },
     shell: { openExternal: async () => {} },
   };
+  const inventoryRefreshes = [];
   Module._load = function (request, ...args) {
+    if (
+      request === "./security.cjs" &&
+      args[0]?.filename === path.resolve(__dirname, "../electron/main.cjs")
+    ) {
+      return {
+        ...originalLoad.call(this, request, ...args),
+        syncGhsa: async (cache) => {
+          cache.ghsa = { status: "ready" };
+        },
+        syncNvd: async (cache) => {
+          cache.nvd = { status: "ready" };
+        },
+      };
+    }
+    if (
+      request === "./inventory.cjs" &&
+      args[0]?.filename === path.resolve(__dirname, "../electron/main.cjs")
+    ) {
+      return {
+        ...originalLoad.call(this, request, ...args),
+        refreshInventory: async (p) => {
+          inventoryRefreshes.push(p.id);
+          p.detectedInventory = [
+            { ecosystem: "npm", name: "minimatch", version: "11.0.1" },
+          ];
+        },
+      };
+    }
     return request === "electron"
       ? electron
       : originalLoad.call(this, request, ...args);
@@ -162,6 +191,22 @@ test("desktop bridge persists notes/inventory, excludes credentials, rejects for
     assert.equal(state.projects.length, 2);
     assert.notEqual(state.projects[0].id, state.projects[1].id);
     assert.equal(state.projects[1].notes, "Built the consultant dashboard");
+    for (const p of state.projects) {
+      p.repo = "https://github.com/acme/app";
+      p.watchRepo = false;
+      p.watchSite = false;
+      p.watchSecurity = true;
+      p.autoInventory = true;
+      p.security = {
+        findings: [{ id: "obsolete-finding" }],
+        initialized: true,
+      };
+    }
+    state = await invoke("refreshProject", state.projects[0].id);
+    assert.deepEqual(inventoryRefreshes, [state.projects[0].id]);
+    assert.deepEqual(state.projects[0].security.findings, []);
+    assert.equal(state.projects[1].security.findings[0].id, "obsolete-finding");
+    for (const p of state.projects) p.watchSecurity = false;
     let prevented = false;
     window.events.get("close")({
       preventDefault: () => {

@@ -342,3 +342,78 @@ test("manual CPE mapping overrides an automatically discovered package identity"
   record.affected = [{ cpe: "example:sample", version: "1.0.0" }];
   assert.equal(matchAdvisories(p, [record]).findings.length, 1);
 });
+
+test("minimatch advisory matches every affected version and excludes the patched release", () => {
+  const record = normalizeGhsa(
+    advisory({
+      ghsa_id: "GHSA-g3hv-75wg-m249",
+      cve_id: "CVE-2026-118764",
+      vulnerabilities: [
+        {
+          package: { ecosystem: "npm", name: "minimatch" },
+          vulnerable_version_range: "< 11.0.1",
+          first_patched_version: "11.0.1",
+        },
+      ],
+    }),
+  );
+  const inventory = ["3.1.5", "5.1.9", "9.0.9", "10.2.6", "11.0.1"].map(
+    (version) => ({ ecosystem: "npm", name: "minimatch", version }),
+  );
+  const result = matchAdvisories({ inventory }, [record]);
+  assert.deepEqual(
+    result.findings.map((f) => f.version),
+    ["3.1.5", "5.1.9", "9.0.9", "10.2.6"],
+  );
+  const lock = require("../package-lock.json");
+  const { components } = importInventory(lock, "package-lock.json");
+  assert.ok(
+    components.some((c) => c.name === "minimatch" && c.version === "11.0.1"),
+  );
+  assert.deepEqual(
+    matchAdvisories({ inventory: components }, [record]).findings,
+    [],
+  );
+});
+
+test("refreshing an updated repository inventory removes obsolete CVE findings", async () => {
+  const record = normalizeGhsa(
+    advisory({
+      vulnerabilities: [
+        {
+          package: { ecosystem: "npm", name: "minimatch" },
+          vulnerable_version_range: "< 11.0.1",
+          first_patched_version: "11.0.1",
+        },
+      ],
+    }),
+  );
+  const p = {
+    repo: "https://github.com/acme/app",
+    autoInventory: true,
+    watchSecurity: true,
+    detectedInventory: [
+      { ecosystem: "npm", name: "minimatch", version: "9.0.9" },
+    ],
+    events: [],
+  };
+  applyFindings(p, [record]);
+  assert.equal(p.security.findings.length, 1);
+  const lock = {
+    lockfileVersion: 3,
+    packages: { "node_modules/minimatch": { version: "11.0.1" } },
+  };
+  await refreshInventory(p, {
+    repository,
+    github: async (_, route) =>
+      route.includes("/git/trees/")
+        ? { tree: [{ type: "blob", path: "package-lock.json", sha: "abc" }] }
+        : {
+            size: 100,
+            content: Buffer.from(JSON.stringify(lock)).toString("base64"),
+          },
+  });
+  applyFindings(p, [record]);
+  assert.deepEqual(p.security.findings, []);
+  assert.equal(p.detectedInventory[0].version, "11.0.1");
+});

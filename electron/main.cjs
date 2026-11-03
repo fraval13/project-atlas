@@ -135,22 +135,26 @@ async function poll(force = false, projectId) {
     busy = false;
   }
 }
-async function securityJob(force = false) {
+async function securityJob(force = false, projectId) {
   if (
     !workspaceReady ||
     securityBusy ||
-    !state.projects.some((p) => p.watchSecurity)
+    !state.projects.some(
+      (p) => p.watchSecurity && (!projectId || p.id === projectId),
+    )
   )
     return state;
   if (!force && Date.now() - securityAttemptAt < 3600000) return state;
   securityBusy = true;
-  securityAttemptAt = Date.now();
+  if (!projectId) securityAttemptAt = Date.now();
   state.feedInfo = { ...state.feedInfo, syncing: true };
   try {
     await Promise.all([syncGhsa(feedCache), syncNvd(feedCache)]);
     await fs.writeFile(file("security-cache.tmp"), JSON.stringify(feedCache));
     await fs.rename(file("security-cache.tmp"), file("security-cache.json"));
-    for (const p of state.projects.filter((p) => p.watchSecurity)) {
+    for (const p of state.projects.filter(
+      (p) => p.watchSecurity && (!projectId || p.id === projectId),
+    )) {
       if (
         p.repo &&
         p.autoInventory &&
@@ -369,7 +373,9 @@ app.whenReady().then(async () => {
       throw new Error("Project not found.");
     if (busy || securityBusy)
       throw new Error("Monitoring is running. Try again shortly.");
-    return poll(true, id);
+    await poll(true, id);
+    await securityJob(true, id);
+    return state;
   });
   handle("refresh", async () => {
     await poll(true);

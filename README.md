@@ -6,11 +6,11 @@ Use Atlas to keep a project notebook, check website availability, follow reposit
 
 ## Install a built package
 
-Download [Atlas 0.1.2 Preview](https://github.com/fraval13/project-atlas/releases/tag/v0.1.2):
+Download [Atlas 0.1.3 Preview](https://github.com/fraval13/project-atlas/releases/tag/v0.1.3):
 
-- [Windows installer — x64 and ARM64](https://github.com/fraval13/project-atlas/releases/download/v0.1.2/Atlas-0.1.2-windows-setup.exe)
-- [Mac disk image — Intel and Apple Silicon](https://github.com/fraval13/project-atlas/releases/download/v0.1.2/Atlas-0.1.2-mac-universal.dmg)
-- [Linux packages — Debian, Fedora, Arch, and AppImage](https://github.com/fraval13/project-atlas/releases/tag/v0.1.2)
+- [Windows installer — x64 and ARM64](https://github.com/fraval13/project-atlas/releases/download/v0.1.3/Atlas-0.1.3-windows-setup.exe)
+- [Mac disk image — Intel and Apple Silicon](https://github.com/fraval13/project-atlas/releases/download/v0.1.3/Atlas-0.1.3-mac-universal.dmg)
+- [Linux packages — Debian, Fedora, Arch, and AppImage](https://github.com/fraval13/project-atlas/releases/tag/v0.1.3)
 
 Expand **Assets → Show all assets** on the release page to see every package. These are preview installers; Windows/macOS trust warnings may appear.
 
@@ -25,20 +25,20 @@ Installers include the application runtime. Node.js, npm, and Git are optional f
 | Arch Linux      | `.pkg.tar.zst` | Install with `pacman`                                |
 | Portable Linux  | `.AppImage`    | Mark executable and run                              |
 
-With the downloaded package in your current directory, these are the x64 commands for version 0.1.2. Replace the filename when installing another version or architecture.
+With the downloaded package in your current directory, these are the x64 commands for version 0.1.3. Replace the filename when installing another version or architecture.
 
 ```sh
 # Arch Linux
-sudo pacman -U ./Atlas-0.1.2-linux-x64.pkg.tar.zst
+sudo pacman -U ./Atlas-0.1.3-linux-x64.pkg.tar.zst
 
 # Debian / Ubuntu
-sudo apt install ./Atlas-0.1.2-linux-amd64.deb
+sudo apt install ./Atlas-0.1.3-linux-amd64.deb
 
 # Fedora
-sudo dnf install ./Atlas-0.1.2-linux-x86_64.rpm
+sudo dnf install ./Atlas-0.1.3-linux-x86_64.rpm
 
 # AppImage
-chmod +x ./Atlas-0.1.2-linux-x86_64.AppImage && ./Atlas-0.1.2-linux-x86_64.AppImage
+chmod +x ./Atlas-0.1.3-linux-x86_64.AppImage && ./Atlas-0.1.3-linux-x86_64.AppImage
 ```
 
 The native Linux packages declare system-library and Polkit dependencies and register Atlas in the application menu. A secure keyring is needed to save GitHub credentials. GNOME desktops may need an AppIndicator extension for tray visibility. AppImage requires a system that permits Chromium's user-namespace sandbox; native packages are preferable on systems with restrictive sandbox policies.
@@ -98,7 +98,7 @@ Elegant is the default on Mac. Atlas is the default on Windows and Linux. Select
 3. Record your contribution and technologies.
 4. Select which website, repository, vulnerability, and notification checks to enable.
 
-GitHub languages and locally parsed manifests supplement your technology list. Adding a repository URL previews detected technologies; saving starts monitoring immediately. Use **Refresh project** in project details to update website and repository information independently of other projects. You can also scan a selected local folder. Supported manifests include npm, Composer, NuGet, Maven/Gradle, Python, Rust, Go, Ruby, and Docker. Detection uses explicit rules rather than AI, does not execute project files, and is bounded to 80 manifests (1 MB each). Unrecognized packages are not evidence that a technology is absent. Search and project/status filters apply to the overview, timeline, and pull requests.
+GitHub languages and locally parsed manifests supplement your technology list. Adding a repository URL previews detected technologies; saving starts monitoring immediately. Use **Refresh project** in project details to update website and repository information, refresh the dependency inventory, and recalculate CVE findings for that project. You can also scan a selected local folder. Supported manifests include npm, Composer, NuGet, Maven/Gradle, Python, Rust, Go, Ruby, and Docker. Detection uses explicit rules rather than AI, does not execute project files, and is bounded to 80 manifests (1 MB each). Unrecognized packages are not evidence that a technology is absent. Search and project/status filters apply to the overview, timeline, and pull requests.
 
 Closing the window keeps Atlas running in the system tray. Use **Open Project Atlas** to restore it and **Quit** to stop monitoring. Some Linux desktops need a tray extension.
 
@@ -134,7 +134,7 @@ Enter one component per line:
 npm | @sanity/client | 8.0.0
 nuget | Newtonsoft.Json | 12.0.1
 maven | org.apache.logging.log4j:log4j-core | 2.14.1
-composer | drupal/core | 10.1.2 | drupal:drupal
+composer | drupal/core | 10.1.3 | drupal:drupal
 cms | WordPress | 6.4.0 | wordpress:wordpress
 ```
 
@@ -178,7 +178,7 @@ npm run dist:mac -- --universal
 
 Build Windows installers on Windows and Mac disk images on macOS. Linux builds need `rpm`, `libarchive-tools`, and `zstd` in addition to the development requirements. Outputs are written to `release/`. Packaging commands build locally with publication disabled.
 
-The **Build installers and main updates** GitHub Actions workflow builds x64/arm64 Linux packages, a combined Windows installer, and a universal Mac package. Manual runs provide downloadable workflow artifacts. Pushes to `main` generate a version such as `0.1.2-main.42` and publish its update release after every platform succeeds and all assets have been uploaded to a draft.
+The **Build installers and main updates** GitHub Actions workflow builds x64/arm64 Linux packages, a combined Windows installer, and a universal Mac package. Manual runs provide downloadable workflow artifacts. Pushes to `main` generate a version such as `0.1.3-main.42` and publish its update release after every platform succeeds and all assets have been uploaded to a draft.
 
 Automatic main publication is enabled when these repository secrets are configured:
 
