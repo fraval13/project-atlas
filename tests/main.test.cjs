@@ -33,6 +33,9 @@ test("desktop bridge persists notes/inventory, excludes credentials, rejects for
     on(name, fn) {
       this.events.set(name, fn);
     }
+    setMenu(menu) {
+      this.menu = menu;
+    }
     loadFile(file) {
       this.loaded = file;
     }
@@ -124,6 +127,7 @@ test("desktop bridge persists notes/inventory, excludes credentials, rejects for
         },
         ...args,
       );
+    if (process.platform === "win32") assert.equal(window.menu, null);
     assert.equal(window.options.webPreferences.contextIsolation, true);
     assert.equal(window.options.webPreferences.sandbox, true);
     assert.equal(window.options.webPreferences.nodeIntegration, false);
