@@ -1,0 +1,69 @@
+name: Publish built preview installers
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful installer workflow run ID
+        required: true
+        type: string
+      tag:
+        description: Existing preview release tag (for example v0.1.1)
+        required: true
+        type: string
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BUILD_RUN: ${{ inputs.run_id }}
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - name: Verify build and draft release
+        shell: bash
+        run: |
+          [[ "$BUILD_RUN" =~ ^[0-9]+$ ]]
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          gh api "repos/$GH_REPO/actions/runs/$BUILD_RUN" > run.json
+          test "$(jq -r .conclusion run.json)" = success
+          test "$(jq -r .path run.json)" = .github/workflows/installers.yml
+          test "$(jq -r .head_branch run.json)" = "$RELEASE_TAG"
+          COMMIT=$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq .object.sha)
+          test "$(jq -r .head_sha run.json)" = "$COMMIT"
+          gh release view "$RELEASE_TAG" --json isDraft,isPrerelease > release.json
+          test "$(jq -r .isDraft release.json)" = true
+          test "$(jq -r .isPrerelease release.json)" = true
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id }}
+          pattern: Atlas-*
+          path: artifacts
+      - name: Verify packages and assemble release
+        shell: bash
+        run: |
+          mkdir release
+          for platform in artifacts/*; do
+            (cd "$platform" && sha256sum --check SHA256SUMS.txt)
+            for file in "$platform"/*; do
+              case "$file" in */SHA256SUMS.txt) continue;; esac
+              name=$(basename "$file")
+              test ! -e "release/$name"
+              cp "$file" "release/$name"
+            done
+          done
+          test -f "release/Atlas-${RELEASE_TAG#v}-windows-setup.exe"
+          test -f "release/Atlas-${RELEASE_TAG#v}-mac-universal.dmg"
+          test -f "release/Atlas-${RELEASE_TAG#v}-mac-universal.zip"
+          for arch in amd64 arm64; do test -f "release/Atlas-${RELEASE_TAG#v}-linux-$arch.deb"; done
+          for arch in x86_64 aarch64; do
+            test -f "release/Atlas-${RELEASE_TAG#v}-linux-$arch.rpm"
+          done
+          for arch in x86_64 arm64; do test -f "release/Atlas-${RELEASE_TAG#v}-linux-$arch.AppImage"; done
+          for arch in x64 aarch64; do test -f "release/Atlas-${RELEASE_TAG#v}-linux-$arch.pkg.tar.zst"; done
+          (cd release && sha256sum *.exe *.dmg *.zip *.deb *.rpm *.pkg.tar.zst *.AppImage > SHA256SUMS.txt)
+          gh release upload "$RELEASE_TAG" release/*
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease

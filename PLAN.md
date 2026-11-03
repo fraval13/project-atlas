@@ -73,3 +73,5 @@ OAuth/device authorization, configurable monitoring schedules, encrypted peer-to
 - Link to current GitHub SSO authorization documentation. Public repositories may be monitored anonymously; distinguish repository monitoring from website health.
 
 - Parse bounded npm, Composer, NuGet, Maven/Gradle, Python, Rust, Go, Ruby and Docker manifests on device, with GitHub URL previews and an optional selected-folder scan. No AI or project execution.
+
+- Publish manual preview releases from successful tag-build artifacts, verifying commit identity, checksums and all platform packages before publishing; retain signing requirements for automatic main releases.

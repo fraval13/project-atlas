@@ -202,3 +202,5 @@ npm run test:ui
 Browser tests use Chrome at `/opt/google/chrome/chrome`; set `ATLAS_CHROMIUM` to your Chromium executable if needed. `npm run verify:feeds` checks public feed connectivity. `npm run format` formats the source and documentation.
 
 Read [AGENTS.md](AGENTS.md) for contributor instructions and [PLAN.md](PLAN.md) for implementation scope.
+
+To publish an unsigned preview from a successful tag build, create a draft prerelease for that tag and run **Publish built preview installers** with the installer workflow run ID and tag. It verifies the build commit, package checksums, and complete platform set before uploading and publishing. This manual preview workflow does not replace the signing requirements for automatic main updates.
