@@ -499,7 +499,7 @@ test("technology badges keep names, show icons and dots, and repository-only car
             url: "",
             client: "Acme",
             notes: "",
-            technologies: ["React", "C#", "Custom system"],
+            technologies: ["React", "C#", "HTML", "Custom system"],
             status: "unknown",
             access: "public",
             watchRepo: true,
@@ -515,18 +515,28 @@ test("technology badges keep names, show icons and dots, and repository-only car
   await page.goto("/");
   const card = page.locator(".project-card");
   await expect(card.locator(".status")).toHaveCount(0);
-  await expect(card.locator(".technology-icon")).toHaveCount(2);
+  await expect(card.locator(".technology-icon")).toHaveCount(3);
   await expect(card.locator(".technology-dot")).toHaveCount(1);
   await card.locator(".project-title").click();
   const details = page.getByRole("dialog");
-  await expect(details.locator(".technology-icon")).toHaveCount(2);
+  await expect(details.locator(".technology-icon")).toHaveCount(3);
   await expect(details.locator(".technology-dot")).toHaveCount(1);
   await expect(details.locator(".tech-list")).toContainText("Custom system");
+  await expect(
+    details
+      .locator(".technology-badge")
+      .filter({ hasText: /^HTML$/ })
+      .locator("img"),
+  ).toHaveAttribute("src", /html5/);
   for (const theme of ["atlas", "hacker", "elegant", "retro"]) {
     await page.evaluate(
       (value) => (document.documentElement.dataset.theme = value),
       theme,
     );
+    for (const image of await details.locator(".technology-icon").all()) {
+      await expect(image).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await expect(image).toHaveCSS("padding", "0px");
+    }
     await details
       .locator(".tech-list")
       .screenshot({ path: `/tmp/atlas-technology-${theme}.png` });

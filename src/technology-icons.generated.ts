@@ -999,6 +999,7 @@ export const technologyIcons: Readonly<Record<string, string>> = {
   hibernate: icon240,
   homebrew: icon241,
   hoppscotch: icon242,
+  html: icon243,
   html5: icon243,
   htmluiframework: icon244,
   htmx: icon244,

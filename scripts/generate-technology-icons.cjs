@@ -35,6 +35,7 @@ for (const icon of catalogue) {
     if (!entries.has(normalize(name))) entries.set(normalize(name), variable);
 }
 const aliases = {
+  HTML: "html5",
   ".NET": "dotnetcore",
   "ASP.NET Core": "dotnetcore",
   "Entity Framework Core": "dotnetcore",

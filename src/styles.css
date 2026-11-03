@@ -660,9 +660,8 @@ h3 {
   display: block;
   flex-shrink: 0;
   object-fit: contain;
-  background: #f1f3fa;
-  border-radius: 3px;
-  padding: 2px;
+  background: transparent;
+  padding: 0;
 }
 .technology-badge {
   max-width: 100%;
