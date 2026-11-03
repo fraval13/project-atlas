@@ -302,3 +302,179 @@ test("update banner downloads only after a click and restarts only after confirm
   await banner.getByRole("button", { name: "Restart to update" }).click();
   expect(await page.evaluate(() => (window as any).restarted)).toBe(true);
 });
+
+test("startup checklist connects GitHub without opening Settings", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    let connected = false;
+    (window as any).atlas = {
+      state: async () => ({ version: 1, projects: [], updatedAt: null }),
+      systemCheck: async () => ({
+        checkedAt: new Date().toISOString(),
+        checks: [
+          {
+            id: "github:git.example.com",
+            host: "git.example.com",
+            name: "GitHub access · git.example.com",
+            status: connected ? "ready" : "missing",
+            required: false,
+            detail: "Token is optional for public repositories",
+            remedy: "Create a read-only token",
+          },
+        ],
+      }),
+      openExternal: async (url: string) => {
+        (window as any).opened = url;
+      },
+      connect: async (host: string, token: string) => {
+        (window as any).connection = { host, token };
+        connected = true;
+        return true;
+      },
+    };
+  });
+  await page.goto("/");
+  const checks = page.getByRole("region", { name: "Startup requirements" });
+  await checks
+    .getByRole("button", { name: "Open personal access token settings" })
+    .click();
+  expect(await page.evaluate(() => (window as any).opened)).toBe(
+    "https://git.example.com/settings/tokens",
+  );
+  await checks
+    .getByLabel("Personal access token for git.example.com")
+    .fill("test-token");
+  await checks.getByRole("button", { name: "Save connection" }).click();
+  await expect(checks).toContainText("All checks passed");
+  expect(await page.evaluate(() => (window as any).connection)).toEqual({
+    host: "git.example.com",
+    token: "test-token",
+  });
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+test("healthy first startup stays quiet", async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).atlas = {
+      state: async () => ({ version: 1, projects: [], updatedAt: null }),
+      systemCheck: async () => ({
+        checkedAt: new Date().toISOString(),
+        checks: [
+          {
+            id: "runtime",
+            name: "Runtime",
+            status: "ready",
+            required: true,
+            detail: "Available",
+            remedy: "",
+          },
+        ],
+      }),
+    };
+  });
+  await page.goto("/");
+  await expect(
+    page.getByRole("region", { name: "Startup requirements" }),
+  ).toHaveCount(0);
+});
+
+test("empty search shows no matches and can clear filters", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page
+    .getByRole("textbox", { name: "Find a project" })
+    .fill("no-such-project-xyz");
+  await expect(
+    page.getByRole("heading", { name: "No matching projects" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add your first project" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Clear search and filters" }).click();
+  await expect(page.locator(".project-card")).toHaveCount(6);
+});
+
+test("repository URL detects technologies and SAML is opt-in", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    (window as any).atlas = {
+      state: async () => ({ version: 1, projects: [], updatedAt: null }),
+      scanRepositoryTechnologies: async (url: string) => ({
+        technologies: ["React", "Electron"],
+        examined: 1,
+        warnings: [],
+      }),
+      scanLocalTechnologies: async () => null,
+    };
+  });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Add project", exact: true })
+    .first()
+    .click();
+  await page
+    .getByLabel("GitHub repository")
+    .fill("https://github.com/acme/app");
+  await expect(page.getByText("React · Electron · 1 manifests")).toBeVisible();
+  await expect(
+    page.getByLabel("Expected SAML / access expiration"),
+  ).toHaveCount(0);
+  await page.getByLabel("Uses SAML SSO").check();
+  await expect(
+    page.getByLabel("Expected SAML / access expiration"),
+  ).toBeVisible();
+  await page.getByLabel("Uses SAML SSO").uncheck();
+  await expect(
+    page.getByLabel("Expected SAML / access expiration"),
+  ).toHaveCount(0);
+});
+
+test("project refresh distinguishes GitHub monitoring from website health", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const project = {
+      id: "one",
+      name: "Monitored project",
+      client: "Acme",
+      repo: "https://github.com/acme/app",
+      url: "https://example.com",
+      notes: "",
+      technologies: [],
+      watchSite: true,
+      watchRepo: true,
+      notify: false,
+      status: "offline",
+      access: "public",
+      checkedAt: new Date().toISOString(),
+      repoCheckedAt: new Date().toISOString(),
+      events: [],
+      prs: [],
+    };
+    (window as any).atlas = {
+      state: async () => ({ version: 1, projects: [project], updatedAt: null }),
+      refreshProject: async (id: string) => {
+        (window as any).refreshed = id;
+        return {
+          version: 1,
+          projects: [{ ...project, status: "online" }],
+          updatedAt: null,
+        };
+      },
+    };
+  });
+  await page.goto("/");
+  await page.locator(".project-title").click();
+  const details = page.getByRole("dialog");
+  await expect(details).toContainText("Website: offline");
+  await expect(details).toContainText(
+    "GitHub: Monitoring repository · public access",
+  );
+  await details
+    .getByRole("button", { name: "Refresh project", exact: true })
+    .click();
+  await expect(details).toContainText("Website: online");
+  expect(await page.evaluate(() => (window as any).refreshed)).toBe("one");
+});

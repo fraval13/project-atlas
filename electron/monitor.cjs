@@ -1,27 +1,6 @@
+const { scanRepository } = require("./technologies.cjs");
 const crypto = require("node:crypto");
 const { repository } = require("./core.cjs");
-const frameworks = {
-  react: "React",
-  next: "Next.js",
-  vue: "Vue",
-  nuxt: "Nuxt",
-  svelte: "Svelte",
-  "@angular/core": "Angular",
-  express: "Express",
-  "@nestjs/core": "NestJS",
-  tailwindcss: "Tailwind CSS",
-  prisma: "Prisma",
-  pg: "PostgreSQL",
-  mysql2: "MySQL",
-  mongodb: "MongoDB",
-  redis: "Redis",
-  vite: "Vite",
-  vitest: "Vitest",
-  electron: "Electron",
-  typescript: "TypeScript",
-  storybook: "Storybook",
-  "@storybook/react": "Storybook",
-};
 async function checkWebsite(
   p,
   { fetcher = fetch, notify = () => {}, now = () => new Date() } = {},
@@ -68,7 +47,12 @@ async function checkWebsite(
 }
 async function checkRepository(
   p,
-  { github, notify = () => {}, now = () => new Date() } = {},
+  {
+    github,
+    authenticated = true,
+    notify = () => {},
+    now = () => new Date(),
+  } = {},
 ) {
   if (!p.repo || !p.watchRepo) return;
   const repo = repository(p.repo);
@@ -100,7 +84,7 @@ async function checkRepository(
       at: pr.created_at,
     }));
     p.detectedTechnologies = Object.keys(langs);
-    p.access = "connected";
+    p.access = authenticated ? "connected" : "public";
     p.repoError = "";
     p.repoInitialized = true;
     p.repoCheckedAt = now().toISOString();
@@ -112,32 +96,22 @@ async function checkRepository(
           text: `${e.actor.login} · ${e.type.replace(/Event$/, "").replace(/([a-z])([A-Z])/g, "$1 $2")}`,
           at: e.created_at,
         });
-    // Optional root package manifest enriches GitHub's language list with known technologies.
-    // Failure here must not hide successfully loaded activity or invalidate authentication.
     if (
       !p.manifestCheckedAt ||
       Date.now() - Date.parse(p.manifestCheckedAt) > 3600000
     ) {
       try {
-        const manifest = await github(
-          repo,
-          `/repos/${repo.path}/contents/package.json`,
-          p,
-        );
-        if (manifest.size > 1000000) throw new Error("Manifest too large");
-        const pkg = JSON.parse(
-          Buffer.from(manifest.content, "base64").toString("utf8"),
-        );
-        const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-        p.frameworks = Array.from(
-          new Set(
-            Object.keys(deps)
-              .filter((k) => frameworks[k])
-              .map((k) => frameworks[k]),
-          ),
-        );
+        const scan = await scanRepository(repo, github, p);
+        if (!scan.examined && scan.warnings.length)
+          throw new Error("Manifest scan incomplete");
+        p.frameworks = scan.technologies;
+        p.technologyWarnings = scan.warnings;
         p.manifestCheckedAt = now().toISOString();
-      } catch {}
+      } catch {
+        p.technologyWarnings = [
+          "Could not refresh manifests. Previously detected technologies are retained.",
+        ];
+      }
     }
     p.detectedTechnologies = Array.from(
       new Set([...p.detectedTechnologies, ...(p.frameworks || [])]),

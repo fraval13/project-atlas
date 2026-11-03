@@ -72,6 +72,36 @@ function loadUpdater() {
     }
   })();
 }
+function updateFailure(error, operation) {
+  if (operation === "check") {
+    const text = String(error?.code || "") + " " + String(error?.message || "");
+    const missing =
+      /ERR_UPDATER_NO_PUBLISHED_VERSIONS|ERR_UPDATER_CHANNEL_FILE_NOT_FOUND|No published versions/.test(
+        text,
+      );
+    return {
+      phase: "unavailable",
+      error: missing
+        ? "No main-channel update has been published yet. You can check again later."
+        : /\b(?:401|403|404)\b/.test(text)
+          ? "The Atlas release feed is unavailable. It may be private or not published yet. Try again later."
+          : "Could not check for updates. Check your connection and try again.",
+    };
+  }
+  const allowed = new Set([
+    "Monitoring is running. Try restarting in a moment.",
+    "Install pkexec/Polkit to authorize package updates, or install the package with your system package manager.",
+    "The system package update was cancelled or failed. Atlas remains open. You can retry or install through your package manager.",
+  ]);
+  return {
+    phase: "error",
+    error: allowed.has(error?.message)
+      ? error.message
+      : operation === "download"
+        ? "Could not download or verify the update. Check your connection and retry."
+        : "Could not install the update. Retry or install the latest package from GitHub Releases.",
+  };
+}
 function createUpdates({
   isPackaged,
   version,
@@ -90,7 +120,8 @@ function createUpdates({
     updater,
     checking,
     downloading,
-    installing;
+    installing,
+    operation = "check";
   const set = (patch) => {
     state = { ...state, ...patch };
   };
@@ -132,12 +163,7 @@ function createUpdates({
         error: "",
       }),
     );
-    updater.on("error", (error) =>
-      set({
-        phase: "error",
-        error: error.message || "Update failed. Try again.",
-      }),
-    );
+    updater.on("error", (error) => set(updateFailure(error, operation)));
     return updater;
   }
   const enabled = () => {
@@ -153,10 +179,11 @@ function createUpdates({
       checking = (async () => {
         await Promise.resolve();
         try {
+          operation = "check";
           set({ phase: "checking", error: "" });
           await engine().checkForUpdates();
         } catch (error) {
-          set({ phase: "error", error: error.message });
+          set(updateFailure(error, "check"));
         } finally {
           checking = null;
         }
@@ -175,10 +202,11 @@ function createUpdates({
       downloading = (async () => {
         await Promise.resolve();
         try {
+          operation = "download";
           set({ phase: "downloading", error: "", percent: 0 });
           await engine().downloadUpdate();
         } catch (error) {
-          set({ phase: "error", error: error.message });
+          set(updateFailure(error, "download"));
         } finally {
           downloading = null;
         }
@@ -193,11 +221,12 @@ function createUpdates({
       if (!state.downloaded) throw new Error("Download the update first.");
       installing = true;
       try {
+        operation = "install";
         set({ phase: "installing", error: "" });
         await beforeInstall();
         engine().quitAndInstall(false, true);
       } catch (error) {
-        set({ phase: "error", error: error.message });
+        set(updateFailure(error, "install"));
       } finally {
         installing = false;
       }
@@ -205,4 +234,4 @@ function createUpdates({
     },
   };
 }
-module.exports = { createUpdates, nativeCommand };
+module.exports = { createUpdates, nativeCommand, updateFailure };

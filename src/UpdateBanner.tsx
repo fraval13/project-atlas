@@ -41,7 +41,7 @@ export function UpdateBanner({
           ? {
               ...old,
               phase: "error",
-              error: error instanceof Error ? error.message : String(error),
+              error: "The update action could not complete. Please try again.",
             }
           : old,
       );
@@ -82,19 +82,21 @@ export function UpdateBanner({
           <b>
             {state.phase === "unsupported"
               ? "Updates are available in installed builds"
-              : state.phase === "error"
-                ? "The update could not complete"
-                : state.phase === "checking"
-                  ? "Checking for updates…"
-                  : state.phase === "downloading"
-                    ? `Downloading Atlas ${state.availableVersion} · ${Math.floor(state.percent)}%`
-                    : state.phase === "installing"
-                      ? "Installing update…"
-                      : state.downloaded
-                        ? `Atlas ${state.availableVersion} is ready`
-                        : state.phase === "available"
-                          ? `Atlas ${state.availableVersion} is available`
-                          : "Atlas updates"}
+              : state.phase === "unavailable"
+                ? "Update checks unavailable"
+                : state.phase === "error"
+                  ? "The update could not complete"
+                  : state.phase === "checking"
+                    ? "Checking for updates…"
+                    : state.phase === "downloading"
+                      ? `Downloading Atlas ${state.availableVersion} · ${Math.floor(state.percent)}%`
+                      : state.phase === "installing"
+                        ? "Installing update…"
+                        : state.downloaded
+                          ? `Atlas ${state.availableVersion} is ready`
+                          : state.phase === "available"
+                            ? `Atlas ${state.availableVersion} is available`
+                            : "Atlas updates"}
           </b>
           <small>
             {state.error ||

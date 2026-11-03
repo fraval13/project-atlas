@@ -6,11 +6,11 @@ Use Atlas to keep a project notebook, check website availability, follow reposit
 
 ## Install a built package
 
-Download [Atlas 0.1.0 Preview](https://github.com/fraval13/project-atlas/releases/tag/v0.1.0):
+Download [Atlas 0.1.1 Preview](https://github.com/fraval13/project-atlas/releases/tag/v0.1.1):
 
-- [Windows installer — x64 and ARM64](https://github.com/fraval13/project-atlas/releases/download/v0.1.0/Atlas-0.1.0-windows-setup.exe)
-- [Mac disk image — Intel and Apple Silicon](https://github.com/fraval13/project-atlas/releases/download/v0.1.0/Atlas-0.1.0-mac-universal.dmg)
-- [Linux packages — Debian, Fedora, Arch, and AppImage](https://github.com/fraval13/project-atlas/releases/tag/v0.1.0)
+- [Windows installer — x64 and ARM64](https://github.com/fraval13/project-atlas/releases/download/v0.1.1/Atlas-0.1.1-windows-setup.exe)
+- [Mac disk image — Intel and Apple Silicon](https://github.com/fraval13/project-atlas/releases/download/v0.1.1/Atlas-0.1.1-mac-universal.dmg)
+- [Linux packages — Debian, Fedora, Arch, and AppImage](https://github.com/fraval13/project-atlas/releases/tag/v0.1.1)
 
 Expand **Assets → Show all assets** on the release page to see every package. These are preview installers; Windows/macOS trust warnings may appear.
 
@@ -25,20 +25,20 @@ Installers include the application runtime. Node.js, npm, and Git are optional f
 | Arch Linux      | `.pkg.tar.zst` | Install with `pacman`                                |
 | Portable Linux  | `.AppImage`    | Mark executable and run                              |
 
-With the downloaded package in your current directory, these are the x64 commands for version 0.1.0. Replace the filename when installing another version or architecture.
+With the downloaded package in your current directory, these are the x64 commands for version 0.1.1. Replace the filename when installing another version or architecture.
 
 ```sh
 # Arch Linux
-sudo pacman -U ./Atlas-0.1.0-linux-x64.pkg.tar.zst
+sudo pacman -U ./Atlas-0.1.1-linux-x64.pkg.tar.zst
 
 # Debian / Ubuntu
-sudo apt install ./Atlas-0.1.0-linux-amd64.deb
+sudo apt install ./Atlas-0.1.1-linux-amd64.deb
 
 # Fedora
-sudo dnf install ./Atlas-0.1.0-linux-x86_64.rpm
+sudo dnf install ./Atlas-0.1.1-linux-x86_64.rpm
 
 # AppImage
-chmod +x ./Atlas-0.1.0-linux-x86_64.AppImage && ./Atlas-0.1.0-linux-x86_64.AppImage
+chmod +x ./Atlas-0.1.1-linux-x86_64.AppImage && ./Atlas-0.1.1-linux-x86_64.AppImage
 ```
 
 The native Linux packages declare system-library and Polkit dependencies and register Atlas in the application menu. A secure keyring is needed to save GitHub credentials. GNOME desktops may need an AppIndicator extension for tray visibility. AppImage requires a system that permits Chromium's user-namespace sandbox; native packages are preferable on systems with restrictive sandbox policies.
@@ -98,7 +98,7 @@ Elegant is the default on Mac. Atlas is the default on Windows and Linux. Select
 3. Record your contribution and technologies.
 4. Select which website, repository, vulnerability, and notification checks to enable.
 
-GitHub languages and recognized dependencies from a root `package.json` supplement your technology list. Search and project/status filters apply to the overview, timeline, and pull requests.
+GitHub languages and locally parsed manifests supplement your technology list. Adding a repository URL previews detected technologies; saving starts monitoring immediately. Use **Refresh project** in project details to update website and repository information independently of other projects. You can also scan a selected local folder. Supported manifests include npm, Composer, NuGet, Maven/Gradle, Python, Rust, Go, Ruby, and Docker. Detection uses explicit rules rather than AI, does not execute project files, and is bounded to 80 manifests (1 MB each). Unrecognized packages are not evidence that a technology is absent. Search and project/status filters apply to the overview, timeline, and pull requests.
 
 Closing the window keeps Atlas running in the system tray. Use **Open Project Atlas** to restore it and **Quit** to stop monitoring. Some Linux desktops need a tray extension.
 
@@ -106,11 +106,13 @@ Website checks run every minute; repository checks run every five minutes. Manua
 
 ## Connect GitHub
 
-Open **Settings & connections** and enter `github.com` or your GitHub Enterprise host, followed by a personal access token. Each host has a separate connection. Enterprise uses the standard `/api/v3` endpoint and system certificate trust.
+Connect directly from the startup checklist, or open **Settings & connections** and enter `github.com` or your GitHub Enterprise host, followed by a personal access token. Each host has a separate connection. Enterprise uses the standard `/api/v3` endpoint and system certificate trust.
+
+Public repositories can be monitored without a token, subject to GitHub’s anonymous API limits. The startup checklist includes optional token availability checks and host-specific **personal access token settings** links. A stored token does not guarantee repository permission.
 
 For private repositories, grant a fine-grained token access to the relevant repositories and read permissions for contents and pull requests. Organization approval may be required. Classic tokens typically need `repo` access for private repositories.
 
-For SAML organizations, authorize the token through GitHub's **Configure SSO** where applicable. Atlas uses the authorized token independently of your browser session. Token expiry, revocation, and organization policies still apply. See [GitHub authentication](https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api) and [SSO token authorization](https://docs.github.com/en/authentication/authenticating-with-saml-single-sign-on/authorizing-a-personal-access-token-for-use-with-single-sign-on).
+Enable **Uses SAML SSO** only for projects whose organization uses it. GitHub SSO authorization errors also identify this requirement automatically. For SAML organizations, authorize the token through GitHub's **Configure SSO** where applicable. Atlas uses the authorized token independently of your browser session. Token expiry, revocation, and organization policies still apply. See [GitHub authentication](https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api) and [SSO token authorization](https://docs.github.com/en/enterprise-cloud@latest/authentication/authenticating-with-single-sign-on/authorizing-a-personal-access-token-for-use-with-single-sign-on).
 
 Credentials are encrypted with Electron safeStorage and stored separately from project data. When access ends, your saved logs, inventories, and PR snapshots remain available as history, while authenticated repository actions are hidden. Website monitoring continues independently.
 
@@ -132,7 +134,7 @@ Enter one component per line:
 npm | @sanity/client | 8.0.0
 nuget | Newtonsoft.Json | 12.0.1
 maven | org.apache.logging.log4j:log4j-core | 2.14.1
-composer | drupal/core | 10.1.0 | drupal:drupal
+composer | drupal/core | 10.1.1 | drupal:drupal
 cms | WordPress | 6.4.0 | wordpress:wordpress
 ```
 

@@ -40,10 +40,16 @@ function project(input) {
   if (!repo && !url) throw new Error("Add a website URL or a repository.");
   const str = (v, max = 10000) =>
     typeof v === "string" ? v.slice(0, max) : "";
-  const authExpiresAt = input.authExpiresAt
-    ? new Date(input.authExpiresAt).toISOString()
-    : "";
-  const reauthDays = input.reauthDays ? Number(input.reauthDays) : null;
+  const usesSaml =
+    input.usesSaml === true ||
+    (input.usesSaml === undefined &&
+      !!(input.authExpiresAt || input.reauthDays));
+  const authExpiresAt =
+    usesSaml && input.authExpiresAt
+      ? new Date(input.authExpiresAt).toISOString()
+      : "";
+  const reauthDays =
+    usesSaml && input.reauthDays ? Number(input.reauthDays) : null;
   const warningDays =
     input.warningDays === undefined ? 7 : Number(input.warningDays);
   if (
@@ -65,6 +71,7 @@ function project(input) {
         : normalizeInventory(input.inventory || []),
     watchSecurity: input.watchSecurity === true,
     autoInventory: input.autoInventory !== false,
+    usesSaml,
     authExpiresAt,
     reauthDays,
     warningDays,

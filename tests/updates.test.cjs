@@ -115,7 +115,21 @@ test("a synchronous updater initialization failure can be retried", async () => 
       return new FakeUpdater();
     },
   });
-  assert.equal((await c.check()).phase, "error");
+  assert.equal((await c.check()).phase, "unavailable");
   assert.equal((await c.check()).phase, "available");
   assert.equal(attempts, 2);
+});
+
+test("update failures never expose HTTP headers or cookies", () => {
+  const { updateFailure } = require("../electron/updates.cjs");
+  for (const operation of ["check", "download", "install"]) {
+    const result = updateFailure(
+      new Error(
+        '404 GET https://github.com/private/releases.atom Headers: {"set-cookie":"secret-cookie"}',
+      ),
+      operation,
+    );
+    assert.doesNotMatch(result.error, /secret-cookie|Headers|releases.atom/);
+    assert.equal(result.phase, operation === "check" ? "unavailable" : "error");
+  }
 });

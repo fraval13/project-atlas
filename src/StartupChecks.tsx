@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   AlertTriangle,
   Check,
@@ -7,13 +7,22 @@ import {
   RefreshCw,
   ShieldCheck,
 } from "lucide-react";
+import { GitHubAccessCheck } from "./GitHubAccessCheck";
 import type { API, SystemReport } from "./types";
-export function StartupChecks({ api }: { api?: API }) {
+export function StartupChecks({
+  api,
+  settings = false,
+}: {
+  api?: API;
+  settings?: boolean;
+}) {
   const [report, setReport] = useState<SystemReport | null>(null),
     [loading, setLoading] = useState(false),
     [error, setError] = useState(""),
     [expanded, setExpanded] = useState(false);
+  const listId = useId();
   const running = useRef(false);
+  const hadIssue = useRef(false);
   const available = typeof api?.systemCheck === "function";
   async function refresh(initial = false) {
     if (!available || running.current) return;
@@ -22,9 +31,12 @@ export function StartupChecks({ api }: { api?: API }) {
     setError("");
     try {
       const result = await api!.systemCheck();
+      if (result.checks.some((c) => c.status !== "ready"))
+        hadIssue.current = true;
       setReport(result);
       if (initial) setExpanded(result.checks.some((c) => c.status !== "ready"));
     } catch (e) {
+      hadIssue.current = true;
       setError(e instanceof Error ? e.message : String(e));
       setExpanded(true);
     } finally {
@@ -35,7 +47,7 @@ export function StartupChecks({ api }: { api?: API }) {
   useEffect(() => {
     void refresh(true);
   }, [api]);
-  if (!available) return null;
+  if (!available || (!settings && !hadIssue.current)) return null;
   const missing = report?.checks.filter((c) => c.status !== "ready") || [],
     required = missing.filter((c) => c.required);
   return (
@@ -47,7 +59,7 @@ export function StartupChecks({ api }: { api?: API }) {
         <button
           className="startup-summary"
           aria-expanded={expanded}
-          aria-controls="startup-check-list"
+          aria-controls={listId}
           onClick={() => setExpanded(!expanded)}
         >
           {required.length || error ? (
@@ -86,7 +98,7 @@ export function StartupChecks({ api }: { api?: API }) {
         )}
       </div>
       {expanded && (
-        <div id="startup-check-list" className="startup-check-list">
+        <div id={listId} className="startup-check-list">
           {error && (
             <div className="error-banner">
               Could not check this setup: {error}. Use Check again to retry.
@@ -111,6 +123,13 @@ export function StartupChecks({ api }: { api?: API }) {
                   </b>
                 </h3>
                 <p>{check.detail}</p>
+                {check.host && api && check.status !== "ready" && (
+                  <GitHubAccessCheck
+                    api={api}
+                    host={check.host}
+                    saved={() => refresh()}
+                  />
+                )}
                 {check.status !== "ready" && (
                   <p className="startup-remedy">{check.remedy}</p>
                 )}

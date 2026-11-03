@@ -1,6 +1,7 @@
 export type UpdateState = {
   phase:
     | "unsupported"
+    | "unavailable"
     | "idle"
     | "checking"
     | "available"
@@ -17,6 +18,7 @@ export type UpdateState = {
   channel: string;
 };
 export type SystemCheck = {
+  host?: string;
   id: string;
   name: string;
   status: "ready" | "missing";
@@ -87,6 +89,7 @@ export type Project = {
     checkedAt: string;
     initialized: boolean;
   };
+  usesSaml?: boolean;
   authExpiresAt?: string;
   tokenExpiresAt?: string;
   reauthDays?: number | null;
@@ -118,7 +121,14 @@ export type State = {
   projects: Project[];
   updatedAt: string | null;
 };
+export type TechnologyScan = {
+  technologies: string[];
+  examined: number;
+  warnings: string[];
+};
 export type API = {
+  scanRepositoryTechnologies: (url: string) => Promise<TechnologyScan>;
+  scanLocalTechnologies: () => Promise<TechnologyScan | null>;
   updateState: () => Promise<UpdateState>;
   checkUpdate: () => Promise<UpdateState>;
   downloadUpdate: () => Promise<UpdateState>;
@@ -134,6 +144,7 @@ export type API = {
   saveProject: (p: Partial<Project>) => Promise<State>;
   deleteProject: (id: string) => Promise<State>;
   refresh: () => Promise<State>;
+  refreshProject: (id: string) => Promise<State>;
   accounts: () => Promise<{ host: string; available: boolean }[]>;
   connect: (host: string, token: string) => Promise<boolean>;
   disconnect: (host: string) => Promise<State>;

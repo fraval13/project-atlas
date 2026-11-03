@@ -14,6 +14,7 @@ const { configureStorage } = require("./identity.cjs");
 configureStorage(app);
 const { createUpdates } = require("./updates.cjs");
 const crypto = require("node:crypto");
+const { scanRepository, scanLocal } = require("./technologies.cjs");
 const { checkDesktop } = require("./requirements.cjs");
 const { checkWebsite, checkRepository } = require("./monitor.cjs");
 const { refreshInventory, importInventory } = require("./inventory.cjs");
@@ -65,14 +66,10 @@ function token(host) {
 }
 async function github(repo, route, project) {
   const credential = token(repo.host);
-  if (!credential)
-    throw new Error(
-      "Connect an account to resume repository monitoring. Your history is preserved.",
-    );
   const response = await fetch(`${repo.api}${route}`, {
     headers: {
       Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${credential}`,
+      ...(credential ? { Authorization: `Bearer ${credential}` } : {}),
     },
     signal: AbortSignal.timeout(15000),
     redirect: "error",
@@ -81,10 +78,12 @@ async function github(repo, route, project) {
   if (project && expiry && Number.isFinite(Date.parse(expiry)))
     project.tokenExpiresAt = new Date(expiry).toISOString();
   if (!response.ok) {
-    if (response.headers.get("x-github-sso"))
+    if (response.headers.get("x-github-sso")) {
+      if (project) project.usesSaml = true;
       throw new Error(
         "SAML SSO authorization required. Authorize this token for your organization in GitHub token settings.",
       );
+    }
     throw new Error(
       response.status === 401
         ? "Authentication expired. Reconnect your account."
@@ -97,11 +96,13 @@ function notify(p, body) {
   if (p.notify && Notification.isSupported())
     new Notification({ title: p.name, body }).show();
 }
-async function poll(force = false) {
+async function poll(force = false, projectId) {
   if (busy || !workspaceReady) return state;
   busy = true;
   try {
-    const pending = [...state.projects];
+    const pending = state.projects.filter(
+      (p) => !projectId || p.id === projectId,
+    );
     const worker = async () => {
       while (pending.length) {
         const p = pending.shift();
@@ -113,7 +114,13 @@ async function poll(force = false) {
           p.repoAttemptAt = new Date().toISOString();
         await Promise.all([
           checkWebsite(p, { notify }),
-          repoDue ? checkRepository(p, { github, notify }) : Promise.resolve(),
+          repoDue && p.repo && p.watchRepo
+            ? checkRepository(p, {
+                github,
+                notify,
+                authenticated: !!token(repository(p.repo).host),
+              })
+            : Promise.resolve(),
         ]);
         p.events = p.events.slice(0, 100);
       }
@@ -181,6 +188,7 @@ function createWindow() {
     minHeight: 700,
     backgroundColor: "#0d1019",
     title: "Project Atlas",
+    autoHideMenuBar: process.platform === "win32",
     icon: path.join(__dirname, "assets/tray.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -189,6 +197,7 @@ function createWindow() {
       sandbox: true,
     },
   });
+  if (process.platform === "win32") win.setMenu(null);
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-navigate", (e) => e.preventDefault());
   if (process.argv.includes("--dev")) win.loadURL("http://127.0.0.1:5173");
@@ -224,6 +233,7 @@ async function loadWorkspace() {
         !Array.isArray(p.prs)
       )
         throw new Error("Damaged project entry in projects.json.");
+      p.usesSaml ??= !!(p.authExpiresAt || p.reauthDays);
       p.access = "disconnected";
       p.status = "unknown";
     }
@@ -296,6 +306,15 @@ app.whenReady().then(async () => {
         safeStorage,
         notifications: Notification,
         workspaceError,
+        githubAccounts: [
+          ...new Set([
+            "github.com",
+            ...Object.keys(secrets),
+            ...state.projects
+              .filter((p) => p.repo)
+              .map((p) => repository(p.repo).host),
+          ]),
+        ].map((host) => ({ host, available: !!token(host) })),
       });
     })().finally(() => {
       diagnosticsTask = null;
@@ -317,7 +336,12 @@ app.whenReady().then(async () => {
         inventoryCheckedAt: sameRepo ? old.inventoryCheckedAt : null,
         inventoryError: sameRepo ? old.inventoryError : "",
         prs: sameRepo ? old.prs : [],
-        detectedTechnologies: old.detectedTechnologies,
+        detectedTechnologies: sameRepo ? old.detectedTechnologies : [],
+        frameworks: sameRepo ? old.frameworks : [],
+        manifestCheckedAt: sameRepo ? old.manifestCheckedAt : null,
+        repoCheckedAt: sameRepo ? old.repoCheckedAt : null,
+        repoAttemptAt: sameRepo ? old.repoAttemptAt : null,
+        technologyWarnings: sameRepo ? old.technologyWarnings : [],
         repoInitialized: sameRepo && old.repoInitialized,
         access: sameRepo ? old.access : "disconnected",
         repoError: sameRepo ? old.repoError : "",
@@ -328,6 +352,7 @@ app.whenReady().then(async () => {
       });
     } else state.projects.push(clean);
     await persist();
+    await poll(true, clean.id);
     if (clean.watchSecurity)
       setTimeout(() => securityJob(true).catch(console.error), 500);
     return state;
@@ -339,10 +364,28 @@ app.whenReady().then(async () => {
     await persist();
     return state;
   });
+  handle("refreshProject", async (id) => {
+    if (typeof id !== "string" || !state.projects.some((p) => p.id === id))
+      throw new Error("Project not found.");
+    if (busy || securityBusy)
+      throw new Error("Monitoring is running. Try again shortly.");
+    return poll(true, id);
+  });
   handle("refresh", async () => {
     await poll(true);
     await securityJob(true);
     return state;
+  });
+  handle("scanRepositoryTechnologies", async (url) =>
+    scanRepository(repository(url), github),
+  );
+  handle("scanLocalTechnologies", async () => {
+    const choice = await dialog.showOpenDialog(win, {
+      properties: ["openDirectory"],
+      title: "Scan project technologies",
+    });
+    if (choice.canceled || !choice.filePaths[0]) return null;
+    return scanLocal(choice.filePaths[0]);
   });
   handle("securityRefresh", () => securityJob(true));
   handle("importInventory", async () => {

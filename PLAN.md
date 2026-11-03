@@ -30,7 +30,7 @@ An Electron desktop application with a React/TypeScript renderer. All project da
 
 ## Later
 
-OAuth/device authorization, configurable monitoring schedules and deeper dependency technology detection, encrypted peer-to-peer device sync with conflict resolution. Monitoring requires a running device and an active network connection.
+OAuth/device authorization, configurable monitoring schedules, encrypted peer-to-peer device sync with conflict resolution. Monitoring requires a running device and an active network connection.
 
 ## Local vulnerability monitoring (requested addition)
 
@@ -66,3 +66,10 @@ OAuth/device authorization, configurable monitoring schedules and deeper depende
 - Installed builds check the GitHub main release channel at startup and hourly. Show an update banner with user-controlled download, progress, retry, and explicit restart/install. Development checkouts stay unchanged.
 - Use electron-updater for version selection, checksums, platform verification, and downloads. Native Linux installs use explicit Polkit elevation without disabling package verification or refreshing Arch package databases independently.
 - Main builds get monotonic prerelease versions. Publish the release only after all platform artifacts upload successfully; signing/notarization credentials gate automatic main publication. Retain user data and flush local writes before installation.
+
+## Repository access and diagnostics
+
+- Include optional, local token availability checks for GitHub.com and configured Enterprise hosts in startup diagnostics. Allow token setup directly in the checklist, with host-specific token settings links; Settings is optional. Stored credentials are not proof of repository permission.
+- Link to current GitHub SSO authorization documentation. Public repositories may be monitored anonymously; distinguish repository monitoring from website health.
+
+- Parse bounded npm, Composer, NuGet, Maven/Gradle, Python, Rust, Go, Ruby and Docker manifests on device, with GitHub URL previews and an optional selected-folder scan. No AI or project execution.

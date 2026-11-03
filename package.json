@@ -1,6 +1,6 @@
 {
   "name": "project-atlas",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
@@ -8,7 +8,7 @@
     "dev": "node scripts/start.cjs --doctor --dev && concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && node scripts/start.cjs --dev\"",
     "build": "tsc -b && vite build",
     "start": "node scripts/start.cjs",
-    "test": "node tests/core.test.cjs && node tests/security.test.cjs && node tests/main.test.cjs && node tests/requirements.test.cjs && node tests/packaging.test.cjs && node tests/updates.test.cjs",
+    "test": "node tests/core.test.cjs && node tests/security.test.cjs && node tests/main.test.cjs && node tests/requirements.test.cjs && node tests/packaging.test.cjs && node tests/updates.test.cjs && node tests/technologies.test.cjs",
     "test:ui": "playwright test",
     "preview": "vite --host 127.0.0.1",
     "format": "prettier --write src electron scripts tests .github *.cjs *.json *.ts *.md index.html",
@@ -23,10 +23,12 @@
   },
   "dependencies": {
     "electron-updater": "^6.8.11",
+    "fast-xml-parser": "^5.11.2",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "semver": "^7.8.5"
+    "semver": "^7.8.5",
+    "smol-toml": "^1.9.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",

@@ -106,6 +106,8 @@ export const demo: State = {
                     : [],
               }
             : undefined,
+        usesSaml: i === 1,
+        repoCheckedAt: new Date(now - 60000).toISOString(),
         warningDays: 7,
         reauthDays: i === 1 ? 30 : null,
         name: s[0],

@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Activity,
+  RefreshCw,
   ArrowDownToLine,
   ArrowUpFromLine,
   ArrowUpRight,
@@ -37,6 +38,7 @@ import { demo } from "./demo";
 import { expiration, toLocalInput } from "./expiry";
 import { InventoryEditor, ProjectSecurity, SecurityOverview } from "./Security";
 import { UpdateBanner } from "./UpdateBanner";
+import { TechnologyScan } from "./TechnologyScan";
 import { StartupChecks } from "./StartupChecks";
 import { initialTheme, type Theme } from "./themes";
 import { ThemePicker } from "./ThemePicker";
@@ -56,6 +58,7 @@ const blank = {
   authExpiresAt: "",
   warningDays: 7,
   reauthDays: null as number | null,
+  usesSaml: false,
 };
 const ago = (at: string) => {
   const m = Math.max(
@@ -618,6 +621,18 @@ function App() {
                           : "CVE check pending"}
                       </span>
                     )}{" "}
+                    {p.repo && (
+                      <p className="muted">
+                        GitHub:{" "}
+                        {!p.watchRepo
+                          ? "Paused"
+                          : p.access === "connected" || p.access === "public"
+                            ? "Monitoring repository"
+                            : p.repoError
+                              ? "Access needs attention"
+                              : "Awaiting first check"}
+                      </p>
+                    )}
                     <div className="card-footer">
                       <span>
                         <Globe size={13} />
@@ -671,10 +686,23 @@ function App() {
                       ? "Try a different search or filter."
                       : "Add a website, a GitHub repository, or both. Keep the story of your work in one place."}
                   </p>
-                  <button className="primary" onClick={() => edit()}>
-                    <Plus size={16} />
-                    Add your first project
-                  </button>
+                  {shown.projects.length ? (
+                    <button
+                      className="primary"
+                      onClick={() => {
+                        setQuery("");
+                        setStatus("All statuses");
+                        setScope("All projects");
+                      }}
+                    >
+                      Clear search and filters
+                    </button>
+                  ) : (
+                    <button className="primary" onClick={() => edit()}>
+                      <Plus size={16} />
+                      Add your first project
+                    </button>
+                  )}
                   {!shown.projects.length && (
                     <button
                       className="text-button"
@@ -896,6 +924,47 @@ function App() {
                 <span key={t}>{t}</span>
               ))}
             </div>
+            <div className="info-box">
+              {selected.url && (
+                <p>
+                  Website:{" "}
+                  {selected.watchSite
+                    ? selected.checkedAt
+                      ? selected.status
+                      : "Awaiting first check"
+                    : "Monitoring paused"}
+                </p>
+              )}
+              {selected.repo && (
+                <p>
+                  GitHub:{" "}
+                  {!selected.watchRepo
+                    ? "Monitoring paused"
+                    : selected.access === "connected" ||
+                        selected.access === "public"
+                      ? `Monitoring repository${selected.access === "public" ? " · public access" : ""}`
+                      : selected.repoError || selected.repoCheckedAt
+                        ? "Access needs attention"
+                        : "Awaiting first check"}
+                  {selected.repoCheckedAt
+                    ? ` · Last checked ${new Date(selected.repoCheckedAt).toLocaleString()}`
+                    : ""}
+                </p>
+              )}
+              <button
+                className="secondary"
+                disabled={loading}
+                onClick={() => {
+                  if (requireLive())
+                    run(async () => {
+                      setState(await api!.refreshProject(selected.id));
+                    });
+                }}
+              >
+                <RefreshCw size={14} />
+                Refresh project
+              </button>
+            </div>
             <div className="detail-links">
               {selected.url && (
                 <button
@@ -918,12 +987,15 @@ function App() {
                 </button>
               )}
             </div>
-            {selected.repo && selected.access !== "connected" && (
-              <div className="info-box">
-                Repository access is disconnected. Your saved history remains
-                available. {selected.repoError}
-              </div>
-            )}
+            {selected.repo &&
+              (selected.repoError ||
+                (selected.access === "disconnected" &&
+                  selected.repoCheckedAt)) && (
+                <div className="info-box">
+                  Repository monitoring needs attention. Your saved history
+                  remains available. {selected.repoError}
+                </div>
+              )}
             {selected.repo && (
               <div className="expiry-info">
                 <h3>
@@ -934,15 +1006,21 @@ function App() {
                   <dt>Access</dt>
                   <dd>
                     {selected.access === "connected"
-                      ? "Connected"
-                      : "Disconnected · history preserved"}
+                      ? "Authenticated"
+                      : selected.access === "public"
+                        ? "Public repository · no token required"
+                        : "Not authenticated · history preserved"}
                   </dd>
-                  <dt>Reauthentication frequency</dt>
-                  <dd>
-                    {selected.reauthDays
-                      ? `Every ${selected.reauthDays} days (your estimate)`
-                      : "Not specified by your organization"}
-                  </dd>
+                  {selected.usesSaml && (
+                    <>
+                      <dt>Reauthentication frequency</dt>
+                      <dd>
+                        {selected.reauthDays
+                          ? `Every ${selected.reauthDays} days (your estimate)`
+                          : "Not specified by your organization"}
+                      </dd>
+                    </>
+                  )}
                   <dt>Next expiration</dt>
                   <dd>
                     {expiration(selected)
@@ -959,8 +1037,12 @@ function App() {
                 </dl>
                 <small>
                   {expiration(selected)?.source === "GitHub token expiry"
-                    ? "GitHub reported this token expiry. SAML authorization may expire earlier."
-                    : "Manual dates are estimates. Atlas cannot read your identity provider’s session lifetime."}
+                    ? selected.usesSaml
+                      ? "GitHub reported this token expiry. SAML authorization may expire earlier."
+                      : "GitHub reported this token expiry."
+                    : selected.usesSaml
+                      ? "Manual dates are estimates. Atlas cannot read your identity provider’s session lifetime."
+                      : "Connect an account to retrieve token expiry when GitHub provides it."}
                   {selected.repoCheckedAt
                     ? ` Repository last checked ${ago(selected.repoCheckedAt)}.`
                     : ""}
@@ -1094,6 +1176,18 @@ function App() {
                     }
                   />
                 </label>
+                <TechnologyScan
+                  api={api}
+                  repo={editing.repo || ""}
+                  apply={(names) =>
+                    setEditing({
+                      ...editing,
+                      technologies: [
+                        ...new Set([...(editing.technologies || []), ...names]),
+                      ],
+                    })
+                  }
+                />
                 <label>
                   Your contribution
                   <textarea
@@ -1122,6 +1216,27 @@ function App() {
                   />
                 </label>
                 {editing.repo && (
+                  <label className="saml-toggle">
+                    <input
+                      type="checkbox"
+                      checked={!!editing.usesSaml}
+                      onChange={(event) =>
+                        setEditing({
+                          ...editing,
+                          usesSaml: event.target.checked,
+                          authExpiresAt: event.target.checked
+                            ? editing.authExpiresAt
+                            : "",
+                          reauthDays: event.target.checked
+                            ? editing.reauthDays
+                            : null,
+                        })
+                      }
+                    />
+                    Uses SAML SSO
+                  </label>
+                )}
+                {editing.repo && editing.usesSaml && (
                   <div className="auth-fields">
                     <h3>
                       <Hourglass size={14} /> Authorization reminders
@@ -1263,12 +1378,27 @@ function App() {
             ) : (
               <div>
                 <ThemePicker theme={theme} choose={chooseTheme} />
+                <StartupChecks api={api} settings />
                 <UpdateBanner api={api} settings />
                 <p className="settings-intro">
                   Connect each GitHub host with a personal access token.
                   Credentials are encrypted with your system keyring and never
                   included in exports.
                 </p>
+                <button
+                  className="text-button"
+                  onClick={() => {
+                    try {
+                      const target = new URL(`https://${host}`);
+                      if (target.host !== host) throw new Error();
+                      open(`${target.origin}/settings/tokens`);
+                    } catch {
+                      setError("Enter a valid GitHub host first.");
+                    }
+                  }}
+                >
+                  Open personal access token settings <ExternalLink size={13} />
+                </button>
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
@@ -1319,7 +1449,7 @@ function App() {
                     className="text-button"
                     onClick={() =>
                       open(
-                        "https://docs.github.com/en/authentication/authenticating-with-saml-single-sign-on/authorizing-a-personal-access-token-for-use-with-single-sign-on",
+                        "https://docs.github.com/en/enterprise-cloud@latest/authentication/authenticating-with-single-sign-on/authorizing-a-personal-access-token-for-use-with-single-sign-on",
                       )
                     }
                   >

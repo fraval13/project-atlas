@@ -42,6 +42,7 @@ test("validates expiry settings and retains fractional day intervals", () => {
   const p = project({
     ...website(),
     repo: "https://github.com/acme/app",
+    usesSaml: true,
     reauthDays: 0.5,
     warningDays: 0,
     authExpiresAt: "2026-12-01T12:00:00Z",
@@ -186,12 +187,26 @@ test("initial PR snapshot is quiet, only new PRs notify, activity deduplicates a
                 created_at: "2026-10-01T00:00:00Z",
               },
             ]
-          : {
-              content: Buffer.from(
-                JSON.stringify({ dependencies: { react: "19", pg: "8" } }),
-              ).toString("base64"),
-              size: 100,
-            };
+          : route.includes("/git/trees/")
+            ? {
+                tree: [
+                  {
+                    type: "blob",
+                    mode: "100644",
+                    path: "package.json",
+                    size: 100,
+                  },
+                ],
+              }
+            : route.endsWith("/acme/app")
+              ? { default_branch: "main" }
+              : {
+                  encoding: "base64",
+                  content: Buffer.from(
+                    JSON.stringify({ dependencies: { react: "19", pg: "8" } }),
+                  ).toString("base64"),
+                  size: 100,
+                };
   const opts = { github, notify: (_, text) => notifications.push(text) };
   await checkRepository(p, opts);
   assert.equal(notifications.length, 0);
@@ -231,4 +246,38 @@ test("countdown warning boundary, expiry, unknown and earliest deadline", async 
   );
   assert.equal(actual.label, "2d 12h remaining");
   assert.equal(actual.source, "GitHub token expiry");
+});
+
+test("SAML reminders are cleared when explicitly disabled", () => {
+  const p = project({
+    ...website(),
+    repo: "https://github.com/acme/app",
+    usesSaml: false,
+    authExpiresAt: "2026-12-01T00:00:00Z",
+    reauthDays: 30,
+  });
+  assert.equal(p.usesSaml, false);
+  assert.equal(p.authExpiresAt, "");
+  assert.equal(p.reauthDays, null);
+});
+test("anonymous repository monitoring is distinct from authenticated access", async () => {
+  const p = {
+    ...website(),
+    repo: "https://github.com/acme/app",
+    watchRepo: true,
+    status: "offline",
+  };
+  await checkRepository(p, {
+    authenticated: false,
+    github: async (_, route) =>
+      route.includes("/languages")
+        ? { TypeScript: 1 }
+        : route.includes("/pulls") || route.includes("/events")
+          ? []
+          : Promise.reject(new Error("No manifests")),
+  });
+  assert.equal(p.access, "public");
+  assert.equal(p.status, "offline");
+  assert.equal(p.repoError, "");
+  assert.ok(p.repoCheckedAt);
 });

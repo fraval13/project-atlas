@@ -121,3 +121,22 @@ test("development checks npm but do not require a production renderer", async ()
   assert.equal(report.checks.find((c) => c.id === "npm").status, "missing");
   assert.ok(!report.checks.some((c) => c.id === "renderer"));
 });
+
+test("GitHub credentials are optional and checked per host without network requests", async () => {
+  const report = await checkDesktop({
+    ...context,
+    githubAccounts: [
+      { host: "github.com", available: false },
+      { host: "git.example.com", available: true },
+    ],
+  });
+  const missing = report.checks.find((c) => c.id === "github:github.com");
+  assert.equal(missing.status, "missing");
+  assert.equal(missing.required, false);
+  assert.equal(missing.host, "github.com");
+  assert.match(missing.detail, /Public repositories/);
+  assert.equal(
+    report.checks.find((c) => c.host === "git.example.com").status,
+    "ready",
+  );
+});

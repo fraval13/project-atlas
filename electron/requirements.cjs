@@ -41,6 +41,7 @@ async function checkDesktop({
   safeStorage,
   notifications,
   workspaceError = "",
+  githubAccounts = [],
   versions = process.versions,
   platform = process.platform,
   run = commandVersion,
@@ -124,6 +125,19 @@ async function checkDesktop({
     remedy:
       "Enable desktop notification support and check system permissions. Restart the desktop session if needed, then check again.",
   });
+  for (const account of githubAccounts)
+    checks.push({
+      id: `github:${account.host}`,
+      name: `GitHub access · ${account.host}`,
+      status: account.available ? "ready" : "missing",
+      required: false,
+      host: account.host,
+      detail: account.available
+        ? "Token stored securely. Repository permissions and SSO are verified when monitoring runs."
+        : "No usable token stored. Public repositories can be monitored anonymously; private repositories require access.",
+      remedy:
+        "Optionally create a read-only personal access token and save it here. Website monitoring does not require a token.",
+    });
   const git = await run("git");
   checks.push({
     id: "git",
