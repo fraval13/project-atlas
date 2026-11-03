@@ -6,11 +6,11 @@ Use Atlas to keep a project notebook, check website availability, follow reposit
 
 ## Install a built package
 
-Download [Atlas 0.1.5 Preview](https://github.com/fraval13/project-atlas/releases/tag/v0.1.5):
+Download [Atlas 0.1.6 Preview](https://github.com/fraval13/project-atlas/releases/tag/v0.1.6):
 
-- [Windows installer — x64 and ARM64](https://github.com/fraval13/project-atlas/releases/download/v0.1.5/Atlas-0.1.5-windows-setup.exe)
-- [Mac disk image — Intel and Apple Silicon](https://github.com/fraval13/project-atlas/releases/download/v0.1.5/Atlas-0.1.5-mac-universal.dmg)
-- [Linux packages — Debian, Fedora, Arch, and AppImage](https://github.com/fraval13/project-atlas/releases/tag/v0.1.5)
+- [Windows installer — x64 and ARM64](https://github.com/fraval13/project-atlas/releases/download/v0.1.6/Atlas-0.1.6-windows-setup.exe)
+- [Mac disk image — Intel and Apple Silicon](https://github.com/fraval13/project-atlas/releases/download/v0.1.6/Atlas-0.1.6-mac-universal.dmg)
+- [Linux packages — Debian, Fedora, Arch, and AppImage](https://github.com/fraval13/project-atlas/releases/tag/v0.1.6)
 
 Expand **Assets → Show all assets** on the release page to see every package. These are preview installers; Windows/macOS trust warnings may appear.
 
@@ -25,20 +25,20 @@ Installers include the application runtime. Node.js, npm, and Git are optional f
 | Arch Linux      | `.pkg.tar.zst` | Install with `pacman`                                |
 | Portable Linux  | `.AppImage`    | Mark executable and run                              |
 
-With the downloaded package in your current directory, these are the x64 commands for version 0.1.5. Replace the filename when installing another version or architecture.
+With the downloaded package in your current directory, these are the x64 commands for version 0.1.6. Replace the filename when installing another version or architecture.
 
 ```sh
 # Arch Linux
-sudo pacman -U ./Atlas-0.1.5-linux-x64.pkg.tar.zst
+sudo pacman -U ./Atlas-0.1.6-linux-x64.pkg.tar.zst
 
 # Debian / Ubuntu
-sudo apt install ./Atlas-0.1.5-linux-amd64.deb
+sudo apt install ./Atlas-0.1.6-linux-amd64.deb
 
 # Fedora
-sudo dnf install ./Atlas-0.1.5-linux-x86_64.rpm
+sudo dnf install ./Atlas-0.1.6-linux-x86_64.rpm
 
 # AppImage
-chmod +x ./Atlas-0.1.5-linux-x86_64.AppImage && ./Atlas-0.1.5-linux-x86_64.AppImage
+chmod +x ./Atlas-0.1.6-linux-x86_64.AppImage && ./Atlas-0.1.6-linux-x86_64.AppImage
 ```
 
 The native Linux packages declare system-library and Polkit dependencies and register Atlas in the application menu. A secure keyring is needed to save GitHub credentials. GNOME desktops may need an AppIndicator extension for tray visibility. AppImage requires a system that permits Chromium's user-namespace sandbox; native packages are preferable on systems with restrictive sandbox policies.
@@ -134,7 +134,7 @@ Enter one component per line:
 npm | @sanity/client | 8.0.0
 nuget | Newtonsoft.Json | 12.0.1
 maven | org.apache.logging.log4j:log4j-core | 2.14.1
-composer | drupal/core | 10.1.5 | drupal:drupal
+composer | drupal/core | 10.1.6 | drupal:drupal
 cms | WordPress | 6.4.0 | wordpress:wordpress
 ```
 
@@ -178,7 +178,7 @@ npm run dist:mac -- --universal
 
 Build Windows installers on Windows and Mac disk images on macOS. Linux builds need `rpm`, `libarchive-tools`, and `zstd` in addition to the development requirements. Outputs are written to `release/`. Packaging commands build locally with publication disabled.
 
-The **Build installers and main updates** GitHub Actions workflow builds x64/arm64 Linux packages, a combined Windows installer, and a universal Mac package. Manual runs provide downloadable workflow artifacts. Pushes to `main` generate a version such as `0.1.5-main.42` and publish its update release after every platform succeeds and all assets have been uploaded to a draft.
+The **Build installers and main updates** GitHub Actions workflow builds x64/arm64 Linux packages, a combined Windows installer, and a universal Mac package. Manual runs provide downloadable workflow artifacts. Pushes to `main` generate a version such as `0.1.6-main.42` and publish its update release after every platform succeeds and all assets have been uploaded to a draft.
 
 Automatic main publication is enabled when these repository secrets are configured:
 
@@ -214,3 +214,7 @@ Choose **Backend health endpoint** as the availability monitor and enter the ful
 A successful response with `Healthy`, `UP`, `OK`, `{"status":"healthy"}`, `{"status":"UP"}`, or `{"healthy":true}` displays **Healthy**. An empty successful response is accepted as an HTTP-only health signal. Explicit unhealthy responses or HTTP 5xx display **Unhealthy**; `Degraded` displays separately. Network/access errors, malformed JSON, and unrecognized responses stay unverified. Responses are limited to 64 KB. Health requests never include GitHub credentials.
 
 The project’s three-dot menu offers **Edit**, **Unwatch / Resume watching**, **Refresh**, and **Delete**. Unwatch pauses all checks and preserves the previous choices and history. Resume restores those choices. Refresh respects the enabled checks; deletion asks for confirmation.
+
+The Security sidebar badge shows critical and high CVE matches for watched projects matching your filters. Activity shows unread events matching the same project filters; opening Activity in the foreground marks that stream as seen. Read markers are saved locally and preserved in import/export. Activity arriving while the window is hidden or a project/settings dialog covers the tab stays unread.
+
+Availability history records the initial verified state and subsequent transitions. Unchanged refreshes update check times and latency without creating more activity. Monitoring errors are recorded once per error period; recovery does not repeat an unchanged verified availability state.

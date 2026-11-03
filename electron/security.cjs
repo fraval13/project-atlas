@@ -261,6 +261,7 @@ function applyFindings(
     p.events.unshift({
       id: crypto.randomUUID(),
       kind: "security",
+      seen: false,
       text,
       at: now().toISOString(),
     });

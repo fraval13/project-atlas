@@ -1,6 +1,6 @@
 {
   "name": "project-atlas",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
@@ -8,7 +8,7 @@
     "dev": "node scripts/start.cjs --doctor --dev && concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && node scripts/start.cjs --dev\"",
     "build": "tsc -b && vite build",
     "start": "node scripts/start.cjs",
-    "test": "node tests/core.test.cjs && node tests/security.test.cjs && node tests/main.test.cjs && node tests/requirements.test.cjs && node tests/packaging.test.cjs && node tests/updates.test.cjs && node tests/technologies.test.cjs && node tests/github.test.cjs && node tests/health.test.cjs",
+    "test": "node tests/core.test.cjs && node tests/security.test.cjs && node tests/main.test.cjs && node tests/requirements.test.cjs && node tests/packaging.test.cjs && node tests/updates.test.cjs && node tests/technologies.test.cjs && node tests/github.test.cjs && node tests/health.test.cjs && node tests/activity.test.cjs",
     "test:ui": "playwright test",
     "preview": "vite --host 127.0.0.1",
     "format": "prettier --write src electron scripts tests .github *.cjs *.json *.ts *.md index.html",

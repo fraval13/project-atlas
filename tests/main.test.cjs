@@ -242,6 +242,52 @@ test("desktop bridge persists notes/inventory, excludes credentials, rejects for
     assert.equal(timers.length, 2);
     tray.menu.find((item) => item.label === "Open Project Atlas").click();
     assert.equal(window.visible, true);
+    state.projects[0].status = "online";
+    state.projects[0].checkedAt = "2026-11-03T00:00:00Z";
+    state.projects[0].events = [
+      {
+        id: "read-me",
+        text: "Seen activity",
+        at: "2026-11-03T00:00:00Z",
+        kind: "repository",
+        seen: false,
+      },
+      {
+        id: "not-yet",
+        text: "Unread activity",
+        at: "2026-11-03T01:00:00Z",
+        kind: "repository",
+        seen: false,
+      },
+    ];
+    state.projects[1].events = [
+      {
+        id: "legacy",
+        text: "Old activity",
+        at: "2025-01-01T00:00:00Z",
+        kind: "history",
+      },
+    ];
+    const writeBeforeRead = fs.writeFile;
+    try {
+      fs.writeFile = async () => {
+        throw new Error("read-state write failed");
+      };
+      await assert.rejects(
+        invoke("markActivitySeen", [
+          { projectId: state.projects[0].id, eventIds: ["read-me"] },
+        ]),
+        /read-state write failed/,
+      );
+      assert.equal(state.projects[0].events[0].seen, false);
+    } finally {
+      fs.writeFile = writeBeforeRead;
+    }
+    await invoke("markActivitySeen", [
+      { projectId: state.projects[0].id, eventIds: ["read-me"] },
+    ]);
+    assert.equal(state.projects[0].events[0].seen, true);
+    assert.equal(state.projects[0].events[1].seen, false);
     await invoke("disconnect", "github.com");
     assert.deepEqual(await invoke("accounts"), []);
     const persisted = JSON.parse(
@@ -284,6 +330,18 @@ test("desktop bridge persists notes/inventory, excludes credentials, rejects for
     );
     const repaired = await invoke("systemCheck");
     assert.ok(!repaired.checks.some((c) => c.id === "workspace"));
+    const reloaded = await invoke("state");
+    assert.deepEqual(
+      reloaded.projects[0].events.map((e) => e.seen),
+      [true, false],
+    );
+    assert.equal(reloaded.projects[1].events[0].seen, true);
+    assert.equal(reloaded.projects[0].status, "unknown");
+    assert.deepEqual(reloaded.projects[0].lastAvailability, {
+      url: reloaded.projects[0].url,
+      kind: "website",
+      state: "online",
+    });
     assert.equal(
       (await invoke("state")).projects[0].notes,
       "Built the consultant dashboard",

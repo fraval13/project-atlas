@@ -129,6 +129,7 @@ export const demo: State = {
         events: [
           {
             id: `e${i}`,
+            seen: false,
             kind: i === 2 ? "status" : "repository",
             text:
               i === 2

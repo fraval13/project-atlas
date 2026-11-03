@@ -1,3 +1,4 @@
+const { verifiedState, restoreAvailability } = require("./availability.cjs");
 const { checkHealthResponse } = require("./health.cjs");
 const { scanRepository } = require("./technologies.cjs");
 const crypto = require("node:crypto");
@@ -8,7 +9,8 @@ async function checkWebsite(
 ) {
   if (!p.watchSite || !p.url) return;
   const old = p.status,
-    oldHealth = p.healthStatus,
+    previous = restoreAvailability(p),
+    hadProblem = p.siteCheckProblem === true,
     health = p.monitorKind === "health",
     first = !p.checkedAt,
     start = Date.now();
@@ -47,21 +49,38 @@ async function checkWebsite(
     p.latency = null;
   }
   p.checkedAt = now().toISOString();
-  if (first || old !== p.status || (health && oldHealth !== p.healthStatus)) {
-    p.events.unshift({
-      id: crypto.randomUUID(),
-      kind: "status",
-      text: `${health ? "Backend" : "Website"} is ${health ? p.healthStatus : p.status}${p.siteError ? ": " + p.siteError : ""}`,
-      at: p.checkedAt,
-    });
-    if (
-      !first &&
-      (old !== p.status || (health && oldHealth !== p.healthStatus))
-    )
-      notify(
-        p,
-        `${health ? "Backend" : "Website"} is ${health ? p.healthStatus : p.status}`,
-      );
+  const current = verifiedState(p);
+  const label = health ? "Backend" : "Website";
+  if (current) {
+    p.siteCheckProblem = false;
+    p.lastAvailability = {
+      url: p.url,
+      kind: health ? "health" : "website",
+      state: current,
+    };
+    if (previous?.state !== current) {
+      p.events.unshift({
+        id: crypto.randomUUID(),
+        kind: "status",
+        seen: false,
+        text: `${label} is ${current}${p.siteError ? ": " + p.siteError : ""}`,
+        at: p.checkedAt,
+      });
+      if (!first && previous) notify(p, `${label} is ${current}`);
+    }
+  } else {
+    p.siteCheckProblem = true;
+    if (!hadProblem) {
+      const text = `${label} check could not verify availability${p.siteError ? ": " + p.siteError : ""}`;
+      p.events.unshift({
+        id: crypto.randomUUID(),
+        kind: "status",
+        seen: false,
+        text,
+        at: p.checkedAt,
+      });
+      if (!first && old !== "unknown") notify(p, text);
+    }
   }
 }
 async function checkRepository(
@@ -120,6 +139,7 @@ async function checkRepository(
           p.events.unshift({
             id: String(e.id),
             kind: "repository",
+            seen: false,
             text: `${e.actor?.login || "unknown"} · ${String(e.type)
               .replace(/Event$/, "")
               .replace(/([a-z])([A-Z])/g, "$1 $2")}`,

@@ -15,6 +15,8 @@ configureStorage(app);
 const { createUpdates } = require("./updates.cjs");
 const crypto = require("node:crypto");
 const { scanRepository, scanLocal } = require("./technologies.cjs");
+const { restoreAvailability } = require("./availability.cjs");
+const { markActivitySeen } = require("./activity.cjs");
 const { requestGithub } = require("./github.cjs");
 const { checkDesktop } = require("./requirements.cjs");
 const { checkWebsite, checkRepository } = require("./monitor.cjs");
@@ -217,9 +219,13 @@ async function loadWorkspace() {
         !Array.isArray(p.prs)
       )
         throw new Error("Damaged project entry in projects.json.");
+      for (const event of p.events)
+        if (typeof event.seen !== "boolean") event.seen = true;
       p.usesSaml ??= !!(p.authExpiresAt || p.reauthDays);
+      restoreAvailability(p);
       p.access = "disconnected";
       p.status = "unknown";
+      p.healthStatus = "unknown";
     }
     state = loaded;
     workspaceReady = true;
@@ -280,6 +286,19 @@ app.whenReady().then(async () => {
   handle("downloadUpdate", () => updates.download());
   handle("installUpdate", () => updates.install());
   handle("state", () => state);
+  handle("markActivitySeen", async (groups) => {
+    const changed = markActivitySeen(state.projects, groups);
+    try {
+      if (changed.length) await persist();
+    } catch (error) {
+      for (const { event, previous } of changed) {
+        if (previous === undefined) delete event.seen;
+        else event.seen = previous;
+      }
+      throw error;
+    }
+    return state;
+  });
   let diagnosticsTask;
   handle("systemCheck", () => {
     if (diagnosticsTask) return diagnosticsTask;
@@ -338,6 +357,8 @@ app.whenReady().then(async () => {
         tokenExpiresAt: sameRepo ? old.tokenExpiresAt : "",
         status: sameUrl ? old.status : "unknown",
         healthStatus: sameUrl ? old.healthStatus : "unknown",
+        lastAvailability: sameUrl ? old.lastAvailability : undefined,
+        siteCheckProblem: sameUrl ? old.siteCheckProblem : false,
         latency: sameUrl ? old.latency : null,
         checkedAt: sameUrl ? old.checkedAt : null,
       });

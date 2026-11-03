@@ -66,7 +66,13 @@ export type FeedInfo = {
   syncing?: boolean;
   importedAt?: string;
 };
-export type Event = { id: string; kind: string; text: string; at: string };
+export type Event = {
+  id: string;
+  kind: string;
+  text: string;
+  at: string;
+  seen?: boolean;
+};
 export type PR = {
   id: number;
   number: number;
@@ -77,6 +83,8 @@ export type PR = {
   at: string;
 };
 export type Project = {
+  lastAvailability?: { url: string; kind: "website" | "health"; state: string };
+  siteCheckProblem?: boolean;
   monitorKind?: "website" | "health";
   healthStatus?: "healthy" | "unhealthy" | "degraded" | "unknown";
   watchResume?: {
@@ -136,6 +144,9 @@ export type TechnologyScan = {
   warnings: string[];
 };
 export type API = {
+  markActivitySeen: (
+    groups: { projectId: string; eventIds: string[] }[],
+  ) => Promise<State>;
   scanRepositoryTechnologies: (url: string) => Promise<TechnologyScan>;
   scanLocalTechnologies: () => Promise<TechnologyScan | null>;
   updateState: () => Promise<UpdateState>;

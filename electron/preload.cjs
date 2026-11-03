@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld(
   Object.fromEntries(
     [
       "state",
+      "markActivitySeen",
       "updateState",
       "checkUpdate",
       "downloadUpdate",

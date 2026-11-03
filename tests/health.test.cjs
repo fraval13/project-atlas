@@ -113,3 +113,19 @@ test("health mode and resume preferences survive validated export/import without
   assert.equal(restored.watchResume.watchRepo, false);
   assert.equal(restored.watchResume.watchSecurity, true);
 });
+
+test("health refreshes only log actual state transitions, including degraded health", async () => {
+  const p = backend();
+  let body = "Healthy";
+  const options = { fetcher: async () => new Response(body) };
+  await checkWebsite(p, options);
+  await checkWebsite(p, options);
+  assert.equal(p.events.length, 1);
+  body = "Degraded";
+  await checkWebsite(p, options);
+  await checkWebsite(p, options);
+  assert.equal(p.events.length, 2);
+  body = "Healthy";
+  await checkWebsite(p, options);
+  assert.equal(p.events.length, 3);
+});

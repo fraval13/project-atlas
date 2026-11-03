@@ -70,6 +70,21 @@ function project(input) {
       typeof input.inventoryText === "string"
         ? parseInventory(input.inventoryText)
         : normalizeInventory(input.inventory || []),
+    lastAvailability:
+      input.lastAvailability?.url === url &&
+      input.lastAvailability.kind ===
+        (input.monitorKind === "health" ? "health" : "website") &&
+      (input.monitorKind === "health"
+        ? ["healthy", "unhealthy", "degraded"]
+        : ["online", "offline"]
+      ).includes(input.lastAvailability.state)
+        ? {
+            url,
+            kind: input.lastAvailability.kind,
+            state: input.lastAvailability.state,
+          }
+        : undefined,
+    siteCheckProblem: input.siteCheckProblem === true,
     monitorKind: input.monitorKind === "health" ? "health" : "website",
     healthStatus: "unknown",
     watchResume:
@@ -141,6 +156,7 @@ function importData(data) {
             text: e.text.slice(0, 500),
             at: e.at,
             kind: "history",
+            seen: typeof e.seen === "boolean" ? e.seen : true,
           }))
       : [];
     clean.prs = Array.isArray(p.prs)

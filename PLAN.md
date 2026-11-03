@@ -87,3 +87,6 @@ OAuth/device authorization, configurable monitoring schedules, encrypted peer-to
 - Offer Edit, Unwatch/Resume, Refresh, and Delete from each project’s accessible three-dot menu. Persist prior watch preferences when pausing, retain history, and confirm deletion.
 
 - Show the minimum read-only token permissions beside startup and Settings token fields. Authenticate public advisory downloads with the saved GitHub.com credential only, never Enterprise credentials or project inventory, and respect rate-limit reset/retry headers while retaining cached findings.
+
+- Show filtered critical/high CVE match counts in Security navigation, and unread activity counts in Activity navigation. Persist per-event read markers, acknowledge only the filtered stream viewed in a foreground Activity tab, and keep hidden/tray/modal activity unread. Treat existing history as seen without clearing explicitly unread records.
+- Retain the last verified availability separately from startup/unverified display status. Log initial availability and real transitions, suppress unchanged refresh/restart entries, and log each monitoring-error period once without repeating an unchanged verified state on recovery.

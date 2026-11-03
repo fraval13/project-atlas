@@ -38,6 +38,7 @@ import { demo } from "./demo";
 import { expiration, toLocalInput } from "./expiry";
 import { InventoryEditor, ProjectSecurity, SecurityOverview } from "./Security";
 import { UpdateBanner } from "./UpdateBanner";
+import { useActivityRead } from "./useActivityRead";
 import { GitHubTokenGuide } from "./GitHubTokenGuide";
 import { ProjectActions } from "./ProjectActions";
 import { availabilityLabel } from "./availability";
@@ -212,6 +213,21 @@ function App() {
   const events = projects
     .flatMap((p) => p.events.map((e) => ({ ...e, project: p })))
     .sort((a, b) => b.at.localeCompare(a.at));
+  const unreadActivity = useActivityRead({
+    events,
+    viewing: page === "Activity" && !modal && !selected,
+    preview,
+    api,
+    update: setState,
+    onError: setError,
+  });
+  const severeFindings = projects
+    .filter((p) => p.watchSecurity)
+    .flatMap((p) => p.security?.findings || []);
+  const criticalCount = severeFindings.filter(
+    (f) => f.severity === "critical",
+  ).length;
+  const highCount = severeFindings.filter((f) => f.severity === "high").length;
   const prs = projects.flatMap((p) =>
     p.prs.map((pr) => ({ ...pr, project: p })),
   );
@@ -307,11 +323,61 @@ function App() {
             return (
               <button
                 key={label as string}
+                aria-label={
+                  label === "Activity" || label === "Security"
+                    ? label
+                    : undefined
+                }
+                aria-describedby={
+                  label === "Activity"
+                    ? "activity-count-description"
+                    : label === "Security"
+                      ? "security-count-description"
+                      : undefined
+                }
                 className={page === label ? "nav-item active" : "nav-item"}
                 onClick={() => setPage(label as string)}
               >
                 <I size={18} />
                 {label as string}
+                {label === "Security" && (
+                  <>
+                    <span
+                      className="nav-count nav-security-count"
+                      aria-hidden="true"
+                      title={`${criticalCount} critical · ${highCount} high CVE matches in watched projects matching your filters`}
+                    >
+                      <span className="nav-critical-count">
+                        {criticalCount} C
+                      </span>
+                      <span className="nav-high-count">{highCount} H</span>
+                    </span>
+                    <span
+                      id="security-count-description"
+                      className="visually-hidden"
+                    >
+                      {criticalCount} critical and {highCount} high CVE matches
+                      in watched projects matching your filters
+                    </span>
+                  </>
+                )}
+                {label === "Activity" && (
+                  <>
+                    <span
+                      className="nav-count nav-activity-count"
+                      aria-hidden="true"
+                      title={`${unreadActivity} unread activities matching your filters`}
+                    >
+                      {unreadActivity}
+                    </span>
+                    <span
+                      id="activity-count-description"
+                      className="visually-hidden"
+                    >
+                      {unreadActivity} unread activities matching your filters
+                    </span>
+                  </>
+                )}
                 {label === "Pull requests" && (
                   <span className="nav-count">
                     {shown.projects.reduce((n, p) => n + p.prs.length, 0)}

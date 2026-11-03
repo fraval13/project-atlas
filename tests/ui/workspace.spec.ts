@@ -918,3 +918,367 @@ test("advisory feed failures show rate-limit retry timing separately from reposi
   ).toBeVisible();
   await expect(page.getByText(/Next feed retry:/)).toBeVisible();
 });
+
+test("Security navigation counts critical and high matches in filtered watched projects", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const finding = (id: string, severity: string) => ({
+      id,
+      advisory: id,
+      severity,
+      package: "sample",
+      version: "1.0.0",
+      ecosystem: "npm",
+      source: "GitHub advisories",
+      url: "https://github.com/advisories/example",
+      title: "Example finding",
+      at: "2026-11-03T00:00:00Z",
+      range: "<2",
+      fixed: "2.0.0",
+      confidence: "affected",
+      score: 9,
+    });
+    const project = (
+      id: string,
+      name: string,
+      severities: string[],
+      watchSecurity = true,
+    ) => ({
+      id,
+      name,
+      client: "Acme",
+      repo: "",
+      url: "https://example.com",
+      notes: "",
+      technologies: [],
+      status: "online",
+      access: "disconnected",
+      watchSite: false,
+      watchRepo: false,
+      watchSecurity,
+      notify: false,
+      events: [],
+      prs: [],
+      security: {
+        findings: severities.map((severity, index) =>
+          finding(`${id}-${index}`, severity),
+        ),
+        componentCount: 1,
+        unmapped: 0,
+        checkedAt: "2026-11-03T00:00:00Z",
+        initialized: true,
+      },
+    });
+    (window as any).atlas = {
+      state: async () => ({
+        version: 1,
+        updatedAt: null,
+        projects: [
+          project("a", "Alpha", ["critical", "high", "high", "medium"]),
+          project("b", "Beta", ["high"]),
+          project("c", "Archived", ["critical", "high"], false),
+        ],
+      }),
+    };
+  });
+  await page.goto("/");
+  const badge = page
+    .getByRole("button", { name: "Security", exact: true })
+    .locator(".nav-security-count");
+  await expect(badge.locator(".nav-critical-count")).toHaveText("1 C");
+  await expect(badge.locator(".nav-high-count")).toHaveText("3 H");
+  await page.getByRole("textbox", { name: "Find a project" }).fill("Alpha");
+  await expect(badge.locator(".nav-high-count")).toHaveText("2 H");
+  await page.getByRole("textbox", { name: "Find a project" }).fill("");
+  await page.getByRole("button", { name: "Security", exact: true }).click();
+  await expect(badge.locator(".nav-high-count")).toHaveText("3 H");
+});
+
+test("Activity unread count resets on visit, survives reload and counts late-arriving events", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const stored = localStorage.getItem("atlas-unread-test");
+    let projects = stored
+      ? JSON.parse(stored)
+      : [
+          {
+            id: "read",
+            name: "Activity project",
+            client: "Acme",
+            repo: "https://github.com/acme/app",
+            url: "",
+            notes: "",
+            technologies: [],
+            status: "unknown",
+            access: "public",
+            watchRepo: true,
+            watchSite: false,
+            notify: false,
+            events: [
+              {
+                id: "one",
+                kind: "repository",
+                text: "First event",
+                at: "2026-11-03T00:00:00Z",
+                seen: false,
+              },
+              {
+                id: "two",
+                kind: "repository",
+                text: "Second event",
+                at: "2026-11-03T01:00:00Z",
+                seen: false,
+              },
+            ],
+            prs: [],
+          },
+        ];
+    const state = () =>
+      structuredClone({ version: 1, projects, updatedAt: null });
+    (window as any).atlas = {
+      state: async () => state(),
+      markActivitySeen: async (groups: any[]) => {
+        for (const group of groups)
+          for (const event of projects.find(
+            (p: any) => p.id === group.projectId,
+          )?.events || [])
+            if (group.eventIds.includes(event.id)) event.seen = true;
+        localStorage.setItem("atlas-unread-test", JSON.stringify(projects));
+        return state();
+      },
+      refresh: async () => {
+        projects[0].events.unshift({
+          id: "late",
+          kind: "repository",
+          text: "Late-arriving event",
+          at: "2020-01-01T00:00:00Z",
+          seen: false,
+        });
+        return state();
+      },
+    };
+  });
+  await page.goto("/");
+  const activity = page.getByRole("button", { name: "Activity", exact: true }),
+    badge = activity.locator(".nav-activity-count");
+  await expect(badge).toHaveText("2");
+  await activity.click();
+  await expect(badge).toHaveText("0");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        JSON.parse(
+          localStorage.getItem("atlas-unread-test") || "[]",
+        )[0]?.events.every((event: any) => event.seen),
+      ),
+    )
+    .toBe(true);
+  await page.reload();
+  await expect(badge).toHaveText("0");
+  await page.getByRole("button", { name: "Refresh monitoring" }).click();
+  await expect(badge).toHaveText("1");
+  await activity.click();
+  await expect(badge).toHaveText("0");
+});
+
+test("hidden Activity view keeps new events unread until it becomes visible", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const project = {
+      id: "hidden",
+      name: "Hidden project",
+      client: "Acme",
+      repo: "https://github.com/acme/app",
+      url: "",
+      notes: "",
+      technologies: [],
+      status: "unknown",
+      access: "public",
+      watchRepo: true,
+      watchSite: false,
+      notify: false,
+      events: [] as any[],
+      prs: [],
+    };
+    const state = () =>
+      structuredClone({ version: 1, projects: [project], updatedAt: null });
+    (window as any).atlas = {
+      state: async () => state(),
+      markActivitySeen: async (groups: any[]) => {
+        for (const group of groups)
+          for (const event of project.events)
+            if (group.eventIds.includes(event.id)) event.seen = true;
+        return state();
+      },
+      refresh: async () => {
+        project.events.unshift({
+          id: "hidden-new",
+          kind: "repository",
+          text: "New event while hidden",
+          at: new Date().toISOString(),
+          seen: false,
+        });
+        return state();
+      },
+    };
+  });
+  await page.goto("/");
+  const activity = page.getByRole("button", { name: "Activity", exact: true }),
+    badge = activity.locator(".nav-activity-count");
+  await activity.click();
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await page.evaluate(() => (window as any).atlas.refresh());
+  await expect(badge).toHaveText("1", { timeout: 7000 });
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(badge).toHaveText("0");
+});
+
+test("activity arriving during an acknowledgement is cleared on the next foreground read", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const project = {
+      id: "pending",
+      name: "Pending project",
+      client: "Acme",
+      repo: "https://github.com/acme/app",
+      url: "",
+      notes: "",
+      technologies: [],
+      status: "unknown",
+      access: "public",
+      watchRepo: true,
+      watchSite: false,
+      notify: false,
+      events: [
+        {
+          id: "one",
+          kind: "repository",
+          text: "First event",
+          at: "2026-11-03T00:00:00Z",
+          seen: false,
+        },
+      ],
+      prs: [],
+    };
+    const state = () =>
+      structuredClone({ version: 1, projects: [project], updatedAt: null });
+    (window as any).readCalls = [];
+    (window as any).atlas = {
+      state: async () => state(),
+      markActivitySeen: (groups: any[]) => {
+        (window as any).readCalls.push(groups);
+        for (const group of groups)
+          for (const event of project.events)
+            if (group.eventIds.includes(event.id)) event.seen = true;
+        if ((window as any).readCalls.length === 1)
+          return new Promise((resolve) => {
+            (window as any).finishFirstRead = () => resolve(state());
+          });
+        return Promise.resolve(state());
+      },
+      refresh: async () => {
+        project.events.unshift({
+          id: "two",
+          kind: "repository",
+          text: "Arrived during read",
+          at: "2026-11-03T01:00:00Z",
+          seen: false,
+        });
+        return state();
+      },
+    };
+  });
+  await page.goto("/");
+  const activity = page.getByRole("button", { name: "Activity", exact: true }),
+    badge = activity.locator(".nav-activity-count");
+  await expect(badge).toHaveText("1");
+  await activity.click();
+  await expect(badge).toHaveText("0");
+  await page
+    .getByRole("button", { name: "Overview", exact: true })
+    .first()
+    .click();
+  await page.getByRole("button", { name: "Refresh monitoring" }).click();
+  await expect(badge).toHaveText("1");
+  await activity.click();
+  await page.evaluate(() => (window as any).finishFirstRead());
+  await expect(badge).toHaveText("0");
+  expect(await page.evaluate(() => (window as any).readCalls.length)).toBe(2);
+});
+
+test("failed read-state persistence keeps activity unread and permits retry on another visit", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const project = {
+      id: "retry",
+      name: "Retry project",
+      client: "Acme",
+      repo: "https://github.com/acme/app",
+      url: "",
+      notes: "",
+      technologies: [],
+      status: "unknown",
+      access: "public",
+      watchRepo: true,
+      watchSite: false,
+      notify: false,
+      events: [
+        {
+          id: "one",
+          kind: "repository",
+          text: "Unread event",
+          at: "2026-11-03T00:00:00Z",
+          seen: false,
+        },
+      ],
+      prs: [],
+    };
+    const state = () =>
+      structuredClone({ version: 1, projects: [project], updatedAt: null });
+    (window as any).failRead = true;
+    (window as any).readCalls = 0;
+    (window as any).atlas = {
+      state: async () => state(),
+      markActivitySeen: async () => {
+        (window as any).readCalls++;
+        if ((window as any).failRead)
+          throw new Error("Could not save activity read state");
+        project.events[0].seen = true;
+        return state();
+      },
+    };
+  });
+  await page.goto("/");
+  const activity = page.getByRole("button", { name: "Activity", exact: true }),
+    badge = activity.locator(".nav-activity-count");
+  await activity.click();
+  await expect(
+    page.getByText("Could not save activity read state", { exact: true }),
+  ).toBeVisible();
+  await expect(badge).toHaveText("1");
+  expect(await page.evaluate(() => (window as any).readCalls)).toBe(1);
+  await page.evaluate(() => ((window as any).failRead = false));
+  await page
+    .getByRole("button", { name: "Overview", exact: true })
+    .first()
+    .click();
+  await activity.click();
+  await expect(badge).toHaveText("0");
+});

@@ -302,3 +302,62 @@ test("partial GitHub permission failures preserve successful monitoring and cach
   assert.match(p.repoError, /Pull requests/);
   assert.equal(p.repoInitialized, false);
 });
+
+test("unchanged website refreshes update probe data without repeating status history", async () => {
+  const p = { ...website(), watchSite: true };
+  let time = Date.parse("2026-11-03T00:00:00Z"),
+    status = 200;
+  const messages = [];
+  const options = {
+    fetcher: async () => new Response("", { status }),
+    now: () => new Date((time += 60000)),
+    notify: (_, message) => messages.push(message),
+  };
+  await checkWebsite(p, options);
+  const firstAt = p.checkedAt;
+  await checkWebsite(p, options);
+  assert.equal(p.events.length, 1);
+  assert.notEqual(p.checkedAt, firstAt);
+  assert.equal(messages.length, 0);
+  status = 503;
+  await checkWebsite(p, options);
+  await checkWebsite(p, options);
+  assert.equal(p.events.length, 2);
+  assert.equal(messages.length, 1);
+  status = 200;
+  await checkWebsite(p, options);
+  assert.equal(p.events.length, 3);
+  assert.deepEqual(
+    p.events.map((e) => e.text.split(":")[0]),
+    ["Website is online", "Website is offline", "Website is online"],
+  );
+});
+test("restart and transient monitoring failures do not repeat the last verified online state", async () => {
+  const { restoreAvailability } = require("../electron/availability.cjs");
+  const p = {
+    ...website(),
+    watchSite: true,
+    status: "online",
+    checkedAt: "2026-11-03T00:00:00Z",
+  };
+  restoreAvailability(p);
+  p.status = "unknown";
+  await checkWebsite(p, { fetcher: async () => new Response("") });
+  assert.equal(p.events.length, 0);
+  await checkWebsite(p, {
+    fetcher: async () => {
+      throw new Error("network error");
+    },
+  });
+  assert.equal(p.events.length, 1);
+  assert.match(p.events[0].text, /could not verify availability/);
+  await checkWebsite(p, {
+    fetcher: async () => {
+      throw new Error("network error");
+    },
+  });
+  assert.equal(p.events.length, 1);
+  await checkWebsite(p, { fetcher: async () => new Response("") });
+  assert.equal(p.status, "online");
+  assert.equal(p.events.length, 1);
+});
