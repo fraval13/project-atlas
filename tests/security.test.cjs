@@ -417,3 +417,37 @@ test("refreshing an updated repository inventory removes obsolete CVE findings",
   assert.deepEqual(p.security.findings, []);
   assert.equal(p.detectedInventory[0].version, "11.0.1");
 });
+
+test("glob cancellation advisory excludes the patched release and the unaffected legacy branch", () => {
+  const record = normalizeGhsa(
+    advisory({
+      ghsa_id: "GHSA-3g3m-2fjr-6pw4",
+      cve_id: "CVE-2026-118773",
+      vulnerabilities: [
+        {
+          package: { ecosystem: "npm", name: "glob" },
+          vulnerable_version_range: ">= 9.0.0, <= 14.0.1",
+          first_patched_version: "14.0.2",
+        },
+      ],
+    }),
+  );
+  const inventory = ["7.2.3", "9.0.0", "13.0.6", "14.0.1", "14.0.2"].map(
+    (version) => ({ ecosystem: "npm", name: "glob", version }),
+  );
+  assert.deepEqual(
+    matchAdvisories({ inventory }, [record]).findings.map((f) => f.version),
+    ["9.0.0", "13.0.6", "14.0.1"],
+  );
+  const { components } = importInventory(
+    require("../package-lock.json"),
+    "package-lock.json",
+  );
+  assert.ok(
+    components.some((c) => c.name === "glob" && c.version === "14.0.2"),
+  );
+  assert.deepEqual(
+    matchAdvisories({ inventory: components }, [record]).findings,
+    [],
+  );
+});

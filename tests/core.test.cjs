@@ -281,3 +281,24 @@ test("anonymous repository monitoring is distinct from authenticated access", as
   assert.equal(p.repoError, "");
   assert.ok(p.repoCheckedAt);
 });
+
+test("partial GitHub permission failures preserve successful monitoring and cached PRs", async () => {
+  const p = {
+    ...website(),
+    repo: "https://github.com/acme/app",
+    watchRepo: true,
+    prs: [{ id: 1, title: "Cached PR" }],
+    repoInitialized: false,
+  };
+  await checkRepository(p, {
+    github: async (_, route) =>
+      route.includes("/languages")
+        ? { TypeScript: 1 }
+        : Promise.reject(new Error("Missing Pull requests permission")),
+  });
+  assert.equal(p.access, "connected");
+  assert.equal(p.prs[0].title, "Cached PR");
+  assert.ok(p.detectedTechnologies.includes("TypeScript"));
+  assert.match(p.repoError, /Pull requests/);
+  assert.equal(p.repoInitialized, false);
+});

@@ -1,16 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { API, TechnologyScan as Scan } from "./types";
 export function TechnologyScan({
   api,
   repo,
-  apply,
+  detected,
 }: {
   api?: API;
   repo: string;
-  apply: (names: string[]) => void;
+  detected: (source: string, names: string[]) => void;
 }) {
   const [result, setResult] = useState<Scan | null>(null),
     [message, setMessage] = useState("");
+  const activeRepo = useRef(repo);
+  activeRepo.current = repo;
+  const detectedCallback = useRef(detected);
+  detectedCallback.current = detected;
   useEffect(() => {
     let cancelled = false;
     setResult(null);
@@ -20,6 +24,10 @@ export function TechnologyScan({
       const url = new URL(repo);
       if (
         url.protocol !== "https:" ||
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash ||
         url.pathname.split("/").filter(Boolean).length !== 2
       )
         return;
@@ -33,13 +41,16 @@ export function TechnologyScan({
         .then((value) => {
           if (!cancelled) {
             setResult(value);
+            detectedCallback.current(repo, value.technologies);
             setMessage("");
           }
         })
-        .catch(() => {
+        .catch((error) => {
           if (!cancelled)
             setMessage(
-              "Could not read repository manifests. Check access or scan a local folder.",
+              error instanceof Error
+                ? error.message
+                : "Could not read repository manifests. Check access or scan a local folder.",
             );
         });
     }, 600);
@@ -52,8 +63,9 @@ export function TechnologyScan({
     <div className="info-box">
       <b>Technology detection</b>
       <p>
-        Reads package manifests on this device. No builds or package
-        installation.
+        GitHub technologies are detected automatically when you enter or change
+        a full repository URL. Files are fetched from that GitHub host and
+        parsed on this device.
       </p>
       {message && <p role="status">{message}</p>}
       {result && (
@@ -66,13 +78,6 @@ export function TechnologyScan({
           {result.warnings.map((w) => (
             <p key={w}>{w}</p>
           ))}
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => apply(result.technologies)}
-          >
-            Add detected technologies
-          </button>
         </>
       )}
       {api?.scanLocalTechnologies && (
@@ -82,8 +87,9 @@ export function TechnologyScan({
           onClick={async () => {
             try {
               const value = await api.scanLocalTechnologies();
-              if (value) {
+              if (value && activeRepo.current === repo) {
                 setResult(value);
+                detectedCallback.current(repo, value.technologies);
                 setMessage("");
               }
             } catch {
@@ -91,7 +97,7 @@ export function TechnologyScan({
             }
           }}
         >
-          Scan local folder
+          Scan local folder instead (optional)
         </button>
       )}
     </div>

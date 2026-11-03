@@ -15,6 +15,7 @@ configureStorage(app);
 const { createUpdates } = require("./updates.cjs");
 const crypto = require("node:crypto");
 const { scanRepository, scanLocal } = require("./technologies.cjs");
+const { requestGithub } = require("./github.cjs");
 const { checkDesktop } = require("./requirements.cjs");
 const { checkWebsite, checkRepository } = require("./monitor.cjs");
 const { refreshInventory, importInventory } = require("./inventory.cjs");
@@ -65,32 +66,7 @@ function token(host) {
   }
 }
 async function github(repo, route, project) {
-  const credential = token(repo.host);
-  const response = await fetch(`${repo.api}${route}`, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      ...(credential ? { Authorization: `Bearer ${credential}` } : {}),
-    },
-    signal: AbortSignal.timeout(15000),
-    redirect: "error",
-  });
-  const expiry = response.headers.get("github-authentication-token-expiration");
-  if (project && expiry && Number.isFinite(Date.parse(expiry)))
-    project.tokenExpiresAt = new Date(expiry).toISOString();
-  if (!response.ok) {
-    if (response.headers.get("x-github-sso")) {
-      if (project) project.usesSaml = true;
-      throw new Error(
-        "SAML SSO authorization required. Authorize this token for your organization in GitHub token settings.",
-      );
-    }
-    throw new Error(
-      response.status === 401
-        ? "Authentication expired. Reconnect your account."
-        : `GitHub returned ${response.status}. Check repository permissions, organization approval, and SSO authorization.`,
-    );
-  }
-  return response.json();
+  return requestGithub(repo, route, { credential: token(repo.host), project });
 }
 function notify(p, body) {
   if (p.notify && Notification.isSupported())
@@ -110,6 +86,7 @@ async function poll(force = false, projectId) {
           force ||
           !p.repoAttemptAt ||
           Date.now() - Date.parse(p.repoAttemptAt) >= 300000;
+        if (force && p.repo && p.watchRepo) p.manifestCheckedAt = null;
         if (repoDue && p.repo && p.watchRepo)
           p.repoAttemptAt = new Date().toISOString();
         await Promise.all([
@@ -332,7 +309,9 @@ app.whenReady().then(async () => {
       old = state.projects.find((p) => p.id === clean.id);
     if (old) {
       const sameRepo = old.repo === clean.repo,
-        sameUrl = old.url === clean.url;
+        sameUrl =
+          old.url === clean.url &&
+          (old.monitorKind || "website") === clean.monitorKind;
       Object.assign(old, clean, {
         events: old.events,
         security: old.security,
@@ -340,7 +319,11 @@ app.whenReady().then(async () => {
         inventoryCheckedAt: sameRepo ? old.inventoryCheckedAt : null,
         inventoryError: sameRepo ? old.inventoryError : "",
         prs: sameRepo ? old.prs : [],
-        detectedTechnologies: sameRepo ? old.detectedTechnologies : [],
+        detectedTechnologies: Array.isArray(input.detectedTechnologies)
+          ? clean.detectedTechnologies
+          : sameRepo
+            ? old.detectedTechnologies
+            : [],
         frameworks: sameRepo ? old.frameworks : [],
         manifestCheckedAt: sameRepo ? old.manifestCheckedAt : null,
         repoCheckedAt: sameRepo ? old.repoCheckedAt : null,
@@ -351,6 +334,7 @@ app.whenReady().then(async () => {
         repoError: sameRepo ? old.repoError : "",
         tokenExpiresAt: sameRepo ? old.tokenExpiresAt : "",
         status: sameUrl ? old.status : "unknown",
+        healthStatus: sameUrl ? old.healthStatus : "unknown",
         latency: sameUrl ? old.latency : null,
         checkedAt: sameUrl ? old.checkedAt : null,
       });
@@ -382,9 +366,39 @@ app.whenReady().then(async () => {
     await securityJob(true);
     return state;
   });
-  handle("scanRepositoryTechnologies", async (url) =>
-    scanRepository(repository(url), github),
-  );
+  handle("scanRepositoryTechnologies", async (url) => {
+    const repo = repository(url);
+    const [scan, languages] = await Promise.allSettled([
+      scanRepository(repo, github),
+      github(repo, `/repos/${repo.path}/languages`),
+    ]);
+    if (scan.status === "rejected" && languages.status === "rejected")
+      throw scan.reason;
+    const result =
+      scan.status === "fulfilled"
+        ? scan.value
+        : {
+            technologies: [],
+            examined: 0,
+            warnings: [
+              `Manifests unavailable: ${scan.reason?.message || "Request failed"}`,
+            ],
+          };
+    if (
+      languages.status === "fulfilled" &&
+      languages.value &&
+      typeof languages.value === "object" &&
+      !Array.isArray(languages.value)
+    )
+      result.technologies = [
+        ...new Set([...Object.keys(languages.value), ...result.technologies]),
+      ].sort();
+    else
+      result.warnings.push(
+        `Languages unavailable: ${languages.status === "rejected" ? languages.reason?.message || "Request failed" : "Unexpected GitHub response"}`,
+      );
+    return result;
+  });
   handle("scanLocalTechnologies", async () => {
     const choice = await dialog.showOpenDialog(win, {
       properties: ["openDirectory"],
@@ -461,6 +475,13 @@ app.whenReady().then(async () => {
     )
       throw new Error(
         "No secure OS credential store available. Unlock your system keyring and restart Atlas.",
+      );
+    const account = await requestGithub(repo, "/user", {
+      credential: value.trim(),
+    });
+    if (typeof account?.login !== "string" || !account.login)
+      throw new Error(
+        "GitHub did not return a valid account. Check the GitHub host and token.",
       );
     if (!Object.hasOwn(secrets, host))
       Object.defineProperty(secrets, host, {

@@ -75,6 +75,13 @@ export type PR = {
   at: string;
 };
 export type Project = {
+  monitorKind?: "website" | "health";
+  healthStatus?: "healthy" | "unhealthy" | "degraded" | "unknown";
+  watchResume?: {
+    watchSite: boolean;
+    watchRepo: boolean;
+    watchSecurity: boolean;
+  };
   inventory?: Component[];
   detectedInventory?: Component[];
   inventoryText?: string;

@@ -17,6 +17,7 @@ function repository(value) {
       "Repository URLs must not contain query parameters or fragments.",
     );
   const parts = u.pathname
+    .replace(/\/+$/, "")
     .replace(/\.git$/, "")
     .split("/")
     .filter(Boolean);
@@ -69,6 +70,16 @@ function project(input) {
       typeof input.inventoryText === "string"
         ? parseInventory(input.inventoryText)
         : normalizeInventory(input.inventory || []),
+    monitorKind: input.monitorKind === "health" ? "health" : "website",
+    healthStatus: "unknown",
+    watchResume:
+      input.watchResume && typeof input.watchResume === "object"
+        ? {
+            watchSite: !!url && input.watchResume.watchSite === true,
+            watchRepo: !!repo && input.watchResume.watchRepo === true,
+            watchSecurity: input.watchResume.watchSecurity === true,
+          }
+        : undefined,
     watchSecurity: input.watchSecurity === true,
     autoInventory: input.autoInventory !== false,
     usesSaml,
@@ -81,6 +92,13 @@ function project(input) {
     repo,
     url,
     notes: str(input.notes),
+    detectedTechnologies: Array.isArray(input.detectedTechnologies)
+      ? input.detectedTechnologies
+          .filter((t) => typeof t === "string")
+          .slice(0, 100)
+          .map((t) => t.trim().slice(0, 60))
+          .filter(Boolean)
+      : [],
     technologies: Array.isArray(input.technologies)
       ? input.technologies
           .filter((t) => typeof t === "string")
@@ -200,7 +218,7 @@ function importData(data) {
     clean.detectedTechnologies = Array.isArray(p.detectedTechnologies)
       ? p.detectedTechnologies
           .filter((t) => typeof t === "string")
-          .slice(0, 40)
+          .slice(0, 100)
           .map((t) => t.slice(0, 60))
       : [];
     return clean;

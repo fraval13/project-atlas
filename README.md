@@ -6,11 +6,11 @@ Use Atlas to keep a project notebook, check website availability, follow reposit
 
 ## Install a built package
 
-Download [Atlas 0.1.3 Preview](https://github.com/fraval13/project-atlas/releases/tag/v0.1.3):
+Download [Atlas 0.1.4 Preview](https://github.com/fraval13/project-atlas/releases/tag/v0.1.4):
 
-- [Windows installer — x64 and ARM64](https://github.com/fraval13/project-atlas/releases/download/v0.1.3/Atlas-0.1.3-windows-setup.exe)
-- [Mac disk image — Intel and Apple Silicon](https://github.com/fraval13/project-atlas/releases/download/v0.1.3/Atlas-0.1.3-mac-universal.dmg)
-- [Linux packages — Debian, Fedora, Arch, and AppImage](https://github.com/fraval13/project-atlas/releases/tag/v0.1.3)
+- [Windows installer — x64 and ARM64](https://github.com/fraval13/project-atlas/releases/download/v0.1.4/Atlas-0.1.4-windows-setup.exe)
+- [Mac disk image — Intel and Apple Silicon](https://github.com/fraval13/project-atlas/releases/download/v0.1.4/Atlas-0.1.4-mac-universal.dmg)
+- [Linux packages — Debian, Fedora, Arch, and AppImage](https://github.com/fraval13/project-atlas/releases/tag/v0.1.4)
 
 Expand **Assets → Show all assets** on the release page to see every package. These are preview installers; Windows/macOS trust warnings may appear.
 
@@ -25,20 +25,20 @@ Installers include the application runtime. Node.js, npm, and Git are optional f
 | Arch Linux      | `.pkg.tar.zst` | Install with `pacman`                                |
 | Portable Linux  | `.AppImage`    | Mark executable and run                              |
 
-With the downloaded package in your current directory, these are the x64 commands for version 0.1.3. Replace the filename when installing another version or architecture.
+With the downloaded package in your current directory, these are the x64 commands for version 0.1.4. Replace the filename when installing another version or architecture.
 
 ```sh
 # Arch Linux
-sudo pacman -U ./Atlas-0.1.3-linux-x64.pkg.tar.zst
+sudo pacman -U ./Atlas-0.1.4-linux-x64.pkg.tar.zst
 
 # Debian / Ubuntu
-sudo apt install ./Atlas-0.1.3-linux-amd64.deb
+sudo apt install ./Atlas-0.1.4-linux-amd64.deb
 
 # Fedora
-sudo dnf install ./Atlas-0.1.3-linux-x86_64.rpm
+sudo dnf install ./Atlas-0.1.4-linux-x86_64.rpm
 
 # AppImage
-chmod +x ./Atlas-0.1.3-linux-x86_64.AppImage && ./Atlas-0.1.3-linux-x86_64.AppImage
+chmod +x ./Atlas-0.1.4-linux-x86_64.AppImage && ./Atlas-0.1.4-linux-x86_64.AppImage
 ```
 
 The native Linux packages declare system-library and Polkit dependencies and register Atlas in the application menu. A secure keyring is needed to save GitHub credentials. GNOME desktops may need an AppIndicator extension for tray visibility. AppImage requires a system that permits Chromium's user-namespace sandbox; native packages are preferable on systems with restrictive sandbox policies.
@@ -98,7 +98,7 @@ Elegant is the default on Mac. Atlas is the default on Windows and Linux. Select
 3. Record your contribution and technologies.
 4. Select which website, repository, vulnerability, and notification checks to enable.
 
-GitHub languages and locally parsed manifests supplement your technology list. Adding a repository URL previews detected technologies; saving starts monitoring immediately. Use **Refresh project** in project details to update website and repository information, refresh the dependency inventory, and recalculate CVE findings for that project. You can also scan a selected local folder. Supported manifests include npm, Composer, NuGet, Maven/Gradle, Python, Rust, Go, Ruby, and Docker. Detection uses explicit rules rather than AI, does not execute project files, and is bounded to 80 manifests (1 MB each). Unrecognized packages are not evidence that a technology is absent. Search and project/status filters apply to the overview, timeline, and pull requests.
+GitHub languages and locally parsed manifests supplement your technology list. Entering or editing a full repository URL automatically fetches repository languages and manifests from the configured GitHub host, parses them on device, and saves the detected technologies separately from your manual list. Saving starts the enabled monitoring checks immediately. Use **Refresh project** in project details to update website and repository information, refresh the dependency inventory, and recalculate CVE findings for that project. You can also scan a selected local folder. Supported manifests include npm, Composer, NuGet, Maven/Gradle, Python, Rust, Go, Ruby, and Docker. Detection uses explicit rules rather than AI, does not execute project files, and is bounded to 80 manifests (1 MB each). Unrecognized packages are not evidence that a technology is absent. Search and project/status filters apply to the overview, timeline, and pull requests.
 
 Closing the window keeps Atlas running in the system tray. Use **Open Project Atlas** to restore it and **Quit** to stop monitoring. Some Linux desktops need a tray extension.
 
@@ -106,11 +106,11 @@ Website checks run every minute; repository checks run every five minutes. Manua
 
 ## Connect GitHub
 
-Connect directly from the startup checklist, or open **Settings & connections** and enter `github.com` or your GitHub Enterprise host, followed by a personal access token. Each host has a separate connection. Enterprise uses the standard `/api/v3` endpoint and system certificate trust.
+Connect directly from the startup checklist, or open **Settings & connections** and enter `github.com` or your GitHub Enterprise host, followed by a personal access token. Atlas verifies the token before saving it; each repository’s permissions are checked separately. For a fine-grained token, select the correct resource owner and explicitly include the private repositories you want to monitor. Each host has a separate connection. Enterprise uses the standard `/api/v3` endpoint and system certificate trust.
 
 Public repositories can be monitored without a token, subject to GitHub’s anonymous API limits. The startup checklist includes optional token availability checks and host-specific **personal access token settings** links. A stored token does not guarantee repository permission.
 
-For private repositories, grant a fine-grained token access to the relevant repositories and read permissions for contents and pull requests. Organization approval may be required. Classic tokens typically need `repo` access for private repositories.
+For private repositories, grant a fine-grained token access to the relevant repositories and read permissions for contents and pull requests. Organization approval may be required. Classic tokens typically need `repo` access for private repositories. GitHub requires classic tokens for outside collaborators accessing organization repositories, subject to organization policy. Atlas currently stores one token per host; a fine-grained token is limited to one resource owner.
 
 Enable **Uses SAML SSO** only for projects whose organization uses it. GitHub SSO authorization errors also identify this requirement automatically. For SAML organizations, authorize the token through GitHub's **Configure SSO** where applicable. Atlas uses the authorized token independently of your browser session. Token expiry, revocation, and organization policies still apply. See [GitHub authentication](https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api) and [SSO token authorization](https://docs.github.com/en/enterprise-cloud@latest/authentication/authenticating-with-single-sign-on/authorizing-a-personal-access-token-for-use-with-single-sign-on).
 
@@ -134,7 +134,7 @@ Enter one component per line:
 npm | @sanity/client | 8.0.0
 nuget | Newtonsoft.Json | 12.0.1
 maven | org.apache.logging.log4j:log4j-core | 2.14.1
-composer | drupal/core | 10.1.3 | drupal:drupal
+composer | drupal/core | 10.1.4 | drupal:drupal
 cms | WordPress | 6.4.0 | wordpress:wordpress
 ```
 
@@ -178,7 +178,7 @@ npm run dist:mac -- --universal
 
 Build Windows installers on Windows and Mac disk images on macOS. Linux builds need `rpm`, `libarchive-tools`, and `zstd` in addition to the development requirements. Outputs are written to `release/`. Packaging commands build locally with publication disabled.
 
-The **Build installers and main updates** GitHub Actions workflow builds x64/arm64 Linux packages, a combined Windows installer, and a universal Mac package. Manual runs provide downloadable workflow artifacts. Pushes to `main` generate a version such as `0.1.3-main.42` and publish its update release after every platform succeeds and all assets have been uploaded to a draft.
+The **Build installers and main updates** GitHub Actions workflow builds x64/arm64 Linux packages, a combined Windows installer, and a universal Mac package. Manual runs provide downloadable workflow artifacts. Pushes to `main` generate a version such as `0.1.4-main.42` and publish its update release after every platform succeeds and all assets have been uploaded to a draft.
 
 Automatic main publication is enabled when these repository secrets are configured:
 
@@ -204,3 +204,13 @@ Browser tests use Chrome at `/opt/google/chrome/chrome`; set `ATLAS_CHROMIUM` to
 Read [AGENTS.md](AGENTS.md) for contributor instructions and [PLAN.md](PLAN.md) for implementation scope.
 
 To publish an unsigned preview from a successful tag build, create a draft prerelease for that tag and run **Publish built preview installers** with the installer workflow run ID and tag. It verifies the build commit, package checksums, and complete platform set before uploading and publishing. This manual preview workflow does not replace the signing requirements for automatic main updates.
+
+Technology badges use locally bundled [Devicon](https://github.com/devicons/devicon) artwork (MIT). Names remain visible beside icons, with colored dots for unrecognized technologies.
+
+## Backend health and monitoring controls
+
+Choose **Backend health endpoint** as the availability monitor and enter the full endpoint URL, such as `https://api.example.com/health` or `https://api.example.com/actuator/health`. Atlas sends a GET every minute while that monitor is enabled. Configure the endpoint in your backend; Atlas does not host it.
+
+A successful response with `Healthy`, `UP`, `OK`, `{"status":"healthy"}`, `{"status":"UP"}`, or `{"healthy":true}` displays **Healthy**. An empty successful response is accepted as an HTTP-only health signal. Explicit unhealthy responses or HTTP 5xx display **Unhealthy**; `Degraded` displays separately. Network/access errors, malformed JSON, and unrecognized responses stay unverified. Responses are limited to 64 KB. Health requests never include GitHub credentials.
+
+The project’s three-dot menu offers **Edit**, **Unwatch / Resume watching**, **Refresh**, and **Delete**. Unwatch pauses all checks and preserves the previous choices and history. Resume restores those choices. Refresh respects the enabled checks; deletion asks for confirmation.

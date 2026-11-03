@@ -39,7 +39,9 @@ export function GitHubAccessCheck({
         className="text-button"
         onClick={() =>
           void api
-            .openExternal(`https://${host}/settings/tokens`)
+            .openExternal(
+              `https://${host}/settings/${host === "github.com" ? "personal-access-tokens" : "tokens"}`,
+            )
             .catch(() => setError("Could not open token settings."))
         }
       >

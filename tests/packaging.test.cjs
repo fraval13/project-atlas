@@ -94,3 +94,19 @@ test("template file lists and temporary cleanup work with patched minimatch", as
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+test("ASAR glob dependency matches files and respects an already-aborted walk", async () => {
+  const { createRequire } = require("node:module");
+  const fromAsar = createRequire(require.resolve("@electron/asar"));
+  const { glob } = fromAsar("glob");
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "atlas-glob-"));
+  try {
+    await fs.writeFile(path.join(root, "include.txt"), "test");
+    await fs.writeFile(path.join(root, "ignore.js"), "test");
+    assert.deepEqual(await glob("*.txt", { cwd: root }), ["include.txt"]);
+    const signal = AbortSignal.abort(new Error("cancelled"));
+    await assert.rejects(glob("**/*", { cwd: root, signal }), /cancelled/);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});

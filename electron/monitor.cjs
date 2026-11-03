@@ -1,3 +1,4 @@
+const { checkHealthResponse } = require("./health.cjs");
 const { scanRepository } = require("./technologies.cjs");
 const crypto = require("node:crypto");
 const { repository } = require("./core.cjs");
@@ -7,6 +8,8 @@ async function checkWebsite(
 ) {
   if (!p.watchSite || !p.url) return;
   const old = p.status,
+    oldHealth = p.healthStatus,
+    health = p.monitorKind === "health",
     first = !p.checkedAt,
     start = Date.now();
   try {
@@ -15,34 +18,50 @@ async function checkWebsite(
       redirect: "follow",
       credentials: "omit",
     });
-    await response.body?.cancel();
+    if (!health) await response.body?.cancel();
     p.httpStatus = response.status;
     p.latency = Date.now() - start;
-    p.status = response.ok
-      ? "online"
-      : response.status === 401 || response.status === 403
-        ? "unknown"
-        : "offline";
-    p.siteError = response.ok
-      ? ""
-      : p.status === "unknown"
-        ? `HTTP ${response.status} · website requires access or blocks monitoring`
-        : `HTTP ${response.status}`;
+    if (health) {
+      const result = await checkHealthResponse(response);
+      p.status = result.status;
+      p.healthStatus = result.healthStatus;
+      p.siteError = result.error;
+    } else {
+      p.status = response.ok
+        ? "online"
+        : response.status === 401 || response.status === 403
+          ? "unknown"
+          : "offline";
+      p.siteError = response.ok
+        ? ""
+        : p.status === "unknown"
+          ? `HTTP ${response.status} · website requires access or blocks monitoring`
+          : `HTTP ${response.status}`;
+    }
   } catch {
     p.status = "unknown";
-    p.siteError =
-      "Could not reach website. Check your network, VPN, or website availability.";
+    if (health) p.healthStatus = "unknown";
+    p.siteError = health
+      ? "Could not reach health endpoint. Check your network, VPN, or endpoint availability."
+      : "Could not reach website. Check your network, VPN, or website availability.";
     p.latency = null;
   }
   p.checkedAt = now().toISOString();
-  if (first || old !== p.status) {
+  if (first || old !== p.status || (health && oldHealth !== p.healthStatus)) {
     p.events.unshift({
       id: crypto.randomUUID(),
       kind: "status",
-      text: `Website is ${p.status}${p.siteError ? ": " + p.siteError : ""}`,
+      text: `${health ? "Backend" : "Website"} is ${health ? p.healthStatus : p.status}${p.siteError ? ": " + p.siteError : ""}`,
       at: p.checkedAt,
     });
-    if (!first && old !== p.status) notify(p, `Website is ${p.status}`);
+    if (
+      !first &&
+      (old !== p.status || (health && oldHealth !== p.healthStatus))
+    )
+      notify(
+        p,
+        `${health ? "Backend" : "Website"} is ${health ? p.healthStatus : p.status}`,
+      );
   }
 }
 async function checkRepository(
@@ -57,45 +76,66 @@ async function checkRepository(
   if (!p.repo || !p.watchRepo) return;
   const repo = repository(p.repo);
   try {
-    const result = await Promise.all([
+    const labels = ["Languages", "Pull requests", "Activity"];
+    const results = await Promise.allSettled([
       github(repo, `/repos/${repo.path}/languages`, p),
       github(repo, `/repos/${repo.path}/pulls?state=open&per_page=100`, p),
       github(repo, `/repos/${repo.path}/events?per_page=30`, p),
     ]);
-    const [langs, prs, events] = result;
-    if (
-      !Array.isArray(prs) ||
-      !Array.isArray(events) ||
-      !langs ||
-      typeof langs !== "object"
-    )
-      throw new Error("Unexpected GitHub response.");
-    if (p.repoInitialized)
-      for (const pr of prs)
-        if (!p.prs.some((old) => old.id === pr.id))
-          notify(p, `New pull request #${pr.number}: ${pr.title}`);
-    p.prs = prs.map((pr) => ({
-      id: pr.id,
-      number: pr.number,
-      title: pr.title,
-      url: pr.html_url,
-      author: pr.user.login,
-      draft: pr.draft,
-      at: pr.created_at,
-    }));
-    p.detectedTechnologies = Object.keys(langs);
+    const valid = results.map(
+      (result, index) =>
+        result.status === "fulfilled" &&
+        (index === 0
+          ? result.value &&
+            typeof result.value === "object" &&
+            !Array.isArray(result.value)
+          : Array.isArray(result.value)),
+    );
+    if (!valid.some(Boolean))
+      throw new Error(
+        results.find((r) => r.status === "rejected")?.reason?.message ||
+          "Unexpected GitHub response.",
+      );
+    if (valid[0]) p.detectedTechnologies = Object.keys(results[0].value);
+    if (valid[1]) {
+      const prs = results[1].value;
+      if (p.repoInitialized)
+        for (const pr of prs)
+          if (!p.prs.some((old) => old.id === pr.id))
+            notify(p, `New pull request #${pr.number}: ${pr.title}`);
+      p.prs = prs.map((pr) => ({
+        id: pr.id,
+        number: pr.number,
+        title: pr.title,
+        url: pr.html_url,
+        author: pr.user?.login || "unknown",
+        draft: pr.draft,
+        at: pr.created_at,
+      }));
+      p.repoInitialized = true;
+    }
+    if (valid[2])
+      for (const e of [...results[2].value].reverse())
+        if (!p.events.some((old) => old.id === String(e.id)))
+          p.events.unshift({
+            id: String(e.id),
+            kind: "repository",
+            text: `${e.actor?.login || "unknown"} · ${String(e.type)
+              .replace(/Event$/, "")
+              .replace(/([a-z])([A-Z])/g, "$1 $2")}`,
+            at: e.created_at,
+          });
     p.access = authenticated ? "connected" : "public";
-    p.repoError = "";
-    p.repoInitialized = true;
+    p.repoError = results
+      .flatMap((result, index) =>
+        valid[index]
+          ? []
+          : [
+              `${labels[index]}: ${result.status === "rejected" ? result.reason?.message || "Request failed" : "Unexpected GitHub response"}`,
+            ],
+      )
+      .join(" ");
     p.repoCheckedAt = now().toISOString();
-    for (const e of [...events].reverse())
-      if (!p.events.some((old) => old.id === String(e.id)))
-        p.events.unshift({
-          id: String(e.id),
-          kind: "repository",
-          text: `${e.actor.login} · ${e.type.replace(/Event$/, "").replace(/([a-z])([A-Z])/g, "$1 $2")}`,
-          at: e.created_at,
-        });
     if (
       !p.manifestCheckedAt ||
       Date.now() - Date.parse(p.manifestCheckedAt) > 3600000
@@ -114,7 +154,7 @@ async function checkRepository(
       }
     }
     p.detectedTechnologies = Array.from(
-      new Set([...p.detectedTechnologies, ...(p.frameworks || [])]),
+      new Set([...(p.detectedTechnologies || []), ...(p.frameworks || [])]),
     );
   } catch (e) {
     p.access = "disconnected";

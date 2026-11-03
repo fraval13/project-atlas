@@ -12,14 +12,14 @@ test("theme preview filters projects and shows the orange expiry countdown", asy
   );
   await page.screenshot({ path: "docs/overview.png", fullPage: true });
   await page
-    .getByRole("combobox", { name: "Filter by website status" })
+    .getByRole("combobox", { name: "Filter by availability status" })
     .selectOption("Offline");
   await expect(page.locator(".project-card")).toHaveCount(1);
   await expect(page.locator(".project-title")).toContainText(
     "Developer platform",
   );
   await page
-    .getByRole("combobox", { name: "Filter by website status" })
+    .getByRole("combobox", { name: "Filter by availability status" })
     .selectOption("All statuses");
   await page.getByRole("textbox", { name: "Find a project" }).fill("helix");
   await expect(page.locator(".project-card")).toHaveCount(1);
@@ -472,13 +472,367 @@ test("project refresh distinguishes GitHub monitoring from website health", asyn
   await page.goto("/");
   await page.locator(".project-title").click();
   const details = page.getByRole("dialog");
-  await expect(details).toContainText("Website: offline");
+  await expect(details).toContainText("Website: Offline");
   await expect(details).toContainText(
     "GitHub: Monitoring repository · public access",
   );
   await details
     .getByRole("button", { name: "Refresh project", exact: true })
     .click();
-  await expect(details).toContainText("Website: online");
+  await expect(details).toContainText("Website: Online");
   expect(await page.evaluate(() => (window as any).refreshed)).toBe("one");
+});
+
+test("technology badges keep names, show icons and dots, and repository-only cards have no website badge", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    (window as any).atlas = {
+      state: async () => ({
+        version: 1,
+        updatedAt: null,
+        projects: [
+          {
+            id: "icons",
+            name: "Icon project",
+            repo: "https://github.com/acme/app",
+            url: "",
+            client: "Acme",
+            notes: "",
+            technologies: ["React", "C#", "Custom system"],
+            status: "unknown",
+            access: "public",
+            watchRepo: true,
+            watchSite: false,
+            notify: false,
+            events: [],
+            prs: [],
+          },
+        ],
+      }),
+    };
+  });
+  await page.goto("/");
+  const card = page.locator(".project-card");
+  await expect(card.locator(".status")).toHaveCount(0);
+  await expect(card.locator(".technology-icon")).toHaveCount(2);
+  await expect(card.locator(".technology-dot")).toHaveCount(1);
+  await card.locator(".project-title").click();
+  const details = page.getByRole("dialog");
+  await expect(details.locator(".technology-icon")).toHaveCount(2);
+  await expect(details.locator(".technology-dot")).toHaveCount(1);
+  await expect(details.locator(".tech-list")).toContainText("Custom system");
+  for (const theme of ["atlas", "hacker", "elegant", "retro"]) {
+    await page.evaluate(
+      (value) => (document.documentElement.dataset.theme = value),
+      theme,
+    );
+    await details
+      .locator(".tech-list")
+      .screenshot({ path: `/tmp/atlas-technology-${theme}.png` });
+  }
+  const image = details.locator(".technology-icon").first();
+  await image.evaluate((element) => element.dispatchEvent(new Event("error")));
+  await expect(details.locator(".technology-dot")).toHaveCount(2);
+  await expect(details.locator(".tech-list")).toContainText("React");
+});
+
+test("repository changes automatically save detected technologies and preserve manual notes", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    (window as any).atlas = {
+      state: async () => ({ version: 1, projects: [], updatedAt: null }),
+      scanRepositoryTechnologies: async (url: string) => ({
+        technologies: url.endsWith("/first") ? ["React"] : ["Vue", "Go"],
+        examined: 1,
+        warnings: [],
+      }),
+      saveProject: async (p: any) => {
+        (window as any).savedProject = p;
+        return {
+          version: 1,
+          projects: [
+            {
+              ...p,
+              id: "new",
+              status: "unknown",
+              access: "public",
+              events: [],
+              prs: [],
+            },
+          ],
+          updatedAt: null,
+        };
+      },
+    };
+  });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Add project", exact: true })
+    .first()
+    .click();
+  await page.getByLabel("Project name").fill("Detected project");
+  await page.getByLabel("Technologies", { exact: false }).fill("Custom system");
+  await page
+    .getByLabel("GitHub repository")
+    .fill("https://github.com/acme/first");
+  await expect(page.getByText("React · 1 manifests")).toBeVisible();
+  await page.getByLabel("Your contribution").fill("Manual notes kept");
+  await page
+    .getByLabel("GitHub repository")
+    .fill("https://github.com/acme/second");
+  await expect(page.getByText("Vue · Go · 1 manifests")).toBeVisible();
+  await page.getByRole("button", { name: "Save project", exact: true }).click();
+  const saved = await page.evaluate(() => (window as any).savedProject);
+  expect(saved.detectedTechnologies).toEqual(["Vue", "Go"]);
+  expect(saved.technologies).toEqual(["Custom system"]);
+  expect(saved.notes).toBe("Manual notes kept");
+});
+
+test("private repository errors link to token access settings", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    (window as any).atlas = {
+      state: async () => ({
+        version: 1,
+        updatedAt: null,
+        projects: [
+          {
+            id: "private",
+            name: "Private project",
+            repo: "https://github.com/acme/private",
+            url: "",
+            client: "Acme",
+            notes: "",
+            technologies: [],
+            status: "unknown",
+            access: "disconnected",
+            repoError:
+              "GitHub returned 404. Check Resource owner and selected repositories.",
+            watchRepo: true,
+            watchSite: false,
+            notify: false,
+            events: [],
+            prs: [],
+          },
+        ],
+      }),
+      openExternal: async (url: string) => {
+        (window as any).opened = url;
+      },
+    };
+  });
+  await page.goto("/");
+  await page.locator(".project-title").click();
+  await page.getByRole("button", { name: "Review token access" }).click();
+  expect(await page.evaluate(() => (window as any).opened)).toBe(
+    "https://github.com/settings/personal-access-tokens",
+  );
+});
+
+test("late technology scan responses cannot overwrite a newer repository", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    (window as any).pending = {};
+    (window as any).atlas = {
+      state: async () => ({ version: 1, projects: [], updatedAt: null }),
+      scanRepositoryTechnologies: (url: string) =>
+        new Promise((resolve) => {
+          (window as any).pending[url] = resolve;
+        }),
+    };
+  });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Add project", exact: true })
+    .first()
+    .click();
+  const input = page.getByLabel("GitHub repository");
+  await input.fill("https://github.com/acme/first");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => !!(window as any).pending["https://github.com/acme/first"],
+      ),
+    )
+    .toBe(true);
+  await input.fill("https://github.com/acme/second");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => !!(window as any).pending["https://github.com/acme/second"],
+      ),
+    )
+    .toBe(true);
+  await page.evaluate(() => {
+    (window as any).pending["https://github.com/acme/second"]({
+      technologies: ["Vue"],
+      examined: 1,
+      warnings: [],
+    });
+  });
+  await expect(page.getByText("Vue · 1 manifests")).toBeVisible();
+  await page.evaluate(() => {
+    (window as any).pending["https://github.com/acme/first"]({
+      technologies: ["React"],
+      examined: 1,
+      warnings: [],
+    });
+  });
+  await expect(page.getByText("Vue · 1 manifests")).toBeVisible();
+  await expect(page.getByText("React · 1 manifests")).toHaveCount(0);
+});
+
+test("project menu supports keyboard navigation, unwatch, resume, refresh, edit and deletion", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    let projects = [
+      {
+        id: "menu",
+        name: "Menu project",
+        repo: "https://github.com/acme/app",
+        url: "https://example.com",
+        client: "Acme",
+        notes: "Keep this history",
+        technologies: [],
+        status: "online",
+        access: "public",
+        watchRepo: true,
+        watchSite: false,
+        watchSecurity: true,
+        notify: false,
+        events: [],
+        prs: [],
+      },
+    ];
+    const state = () => ({ version: 1, projects, updatedAt: null });
+    (window as any).atlas = {
+      state: async () => state(),
+      saveProject: async (p: any) => {
+        (window as any).savedProject = p;
+        projects = [p];
+        return state();
+      },
+      refreshProject: async (id: string) => {
+        (window as any).refreshed = id;
+        return state();
+      },
+      deleteProject: async (id: string) => {
+        (window as any).deleted = id;
+        projects = [];
+        return state();
+      },
+    };
+  });
+  await page.goto("/");
+  const trigger = page.getByRole("button", {
+    name: "Actions for Menu project",
+    exact: true,
+  });
+  await trigger.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(
+    page.getByRole("menuitem", { name: "Edit", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(
+    page.getByRole("menuitem", { name: "Delete", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await page.getByRole("menuitem", { name: "Unwatch", exact: true }).click();
+  await expect(page.locator(".project-card")).toHaveCount(0);
+  await page.getByRole("button", { name: "Unwatched", exact: true }).click();
+  await expect(page.locator(".project-card")).toHaveCount(1);
+  let saved = await page.evaluate(() => (window as any).savedProject);
+  expect([saved.watchSite, saved.watchRepo, saved.watchSecurity]).toEqual([
+    false,
+    false,
+    false,
+  ]);
+  expect(saved.notes).toBe("Keep this history");
+  await trigger.click();
+  await page
+    .getByRole("menuitem", { name: "Resume watching", exact: true })
+    .click();
+  await expect(page.locator(".project-card")).toHaveCount(0);
+  await page.getByRole("button", { name: /Watched projects/ }).click();
+  await expect(page.locator(".project-card")).toHaveCount(1);
+  saved = await page.evaluate(() => (window as any).savedProject);
+  expect([saved.watchSite, saved.watchRepo, saved.watchSecurity]).toEqual([
+    false,
+    true,
+    true,
+  ]);
+  await trigger.click();
+  await page.getByRole("menuitem", { name: "Refresh", exact: true }).click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).refreshed))
+    .toBe("menu");
+  await trigger.click();
+  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+  await expect(page.getByLabel("Project name")).toHaveValue("Menu project");
+  await page.keyboard.press("Escape");
+  page.once("dialog", (dialog) => dialog.accept());
+  await trigger.click();
+  await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
+  await expect(page.locator(".project-card")).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).deleted)).toBe("menu");
+});
+
+test("backend health monitor settings persist and use healthy labels", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    (window as any).atlas = {
+      state: async () => ({ version: 1, projects: [], updatedAt: null }),
+      saveProject: async (p: any) => {
+        (window as any).savedProject = p;
+        return {
+          version: 1,
+          projects: [
+            {
+              ...p,
+              id: "health",
+              status: "online",
+              healthStatus: "healthy",
+              access: "disconnected",
+              events: [],
+              prs: [],
+            },
+          ],
+          updatedAt: null,
+        };
+      },
+    };
+  });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Add project", exact: true })
+    .first()
+    .click();
+  await page.getByLabel("Project name").fill("API backend");
+  await page
+    .getByRole("combobox", { name: "Availability monitor" })
+    .selectOption("health");
+  await page
+    .getByLabel("Health endpoint URL")
+    .fill("https://api.example.com/health");
+  await page.getByRole("button", { name: "Save project", exact: true }).click();
+  await expect(page.locator(".project-card .status")).toHaveText("Healthy");
+  const saved = await page.evaluate(() => (window as any).savedProject);
+  expect(saved.monitorKind).toBe("health");
+  expect(saved.url).toBe("https://api.example.com/health");
+  await page.locator(".project-title").click();
+  await expect(page.getByRole("dialog")).toContainText(
+    "Backend health: Healthy",
+  );
+  await expect(
+    page.getByRole("button", { name: "Open health endpoint" }),
+  ).toBeVisible();
 });

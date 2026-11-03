@@ -598,6 +598,9 @@ h3 {
   border-color: var(--theme-border, #414454);
   color: var(--theme-muted, #b4b9c9);
 }
+.card-top > .project-icon + .icon-btn {
+  margin-left: auto;
+}
 .card-top > .icon-btn {
   padding: 2px;
 }
@@ -643,7 +646,7 @@ h3 {
   min-height: 22px;
 }
 .tech-list > span {
-  font-size: 8px;
+  font-size: 10px;
   color: var(--theme-muted, #aeb8c9);
   background: var(--theme-surface-raised, #202635);
   border: 1px solid var(--theme-border, #2d3545);
@@ -653,7 +656,23 @@ h3 {
   align-items: center;
   gap: 5px;
 }
-.tech-list i {
+.technology-icon {
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
+  background: #f1f3fa;
+  border-radius: 3px;
+  padding: 2px;
+}
+.technology-badge {
+  max-width: 100%;
+}
+.technology-name {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.tech-list .technology-dot {
+  flex-shrink: 0;
   width: 5px;
   height: 5px;
   border-radius: 50%;
@@ -2058,4 +2077,74 @@ h3 {
   width: 100%;
   height: 5px;
   accent-color: var(--theme-accent, #8ae2cb);
+}
+
+.repository-url-help {
+  color: var(--theme-muted, #aeb8c9);
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  margin: -7px 0 16px;
+}
+
+/* Project menu shares theme tokens and stays above neighboring cards. */
+.project-actions {
+  position: relative;
+  display: inline-flex;
+}
+.card-top > .project-icon + .project-actions {
+  margin-left: auto;
+}
+.project-actions > .icon-btn {
+  padding: 2px;
+}
+.project-card:has(.project-actions [aria-expanded="true"]) {
+  position: relative;
+  z-index: 25;
+}
+.project-action-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 180px;
+  padding: 5px;
+  background: var(--theme-surface-raised, #202635);
+  border: 1px solid var(--theme-border, #394456);
+  border-radius: 7px;
+  box-shadow: 0 12px 30px #0005;
+  z-index: 30;
+}
+.project-action-menu > button {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+  padding: 9px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.project-action-menu > button:hover,
+.project-action-menu > button:focus-visible {
+  background: var(--theme-info-surface, #29374a);
+  color: var(--theme-text, #fff);
+}
+.project-action-menu > .project-action-delete {
+  color: var(--theme-danger, #f19d9d);
+  border-top: 1px solid var(--theme-border, #394456);
+  border-radius: 0;
+  margin-top: 3px;
+}
+.modal select {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--theme-border, #343e50);
+  background: var(--theme-surface, #0f1521);
+  color: var(--theme-text, #d6dfef);
+}
+.status.degraded {
+  background: var(--theme-warning-surface, #302b1b);
+  color: var(--theme-warning, #e1c589);
 }

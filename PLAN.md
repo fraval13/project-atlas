@@ -77,3 +77,11 @@ OAuth/device authorization, configurable monitoring schedules, encrypted peer-to
 - Publish manual preview releases from successful tag-build artifacts, verifying commit identity, checksums and all platform packages before publishing; retain signing requirements for automatic main releases.
 
 - Per-project refresh must refresh the enabled dependency inventory and recalculate vulnerability findings, without refreshing other projects. Retain previous inventory with a visible error if access fails.
+
+- Show locally bundled technology icons with readable names on cards and project details; use the existing colored dot for unknown or unavailable icons.
+
+- Automatically apply GitHub language/manifest detection when a complete repository URL is entered or edited, retaining manual technology notes. Hide website badges on projects with no deployment URL.
+- Verify tokens before storing them and explain private repository 404s with host-specific access guidance. Keep successful repository sections available when a separate section lacks permission.
+
+- Support backend health endpoints alongside website monitors, recognizing common plain-text/JSON health states with bounded responses. Show Healthy/Unhealthy/Degraded without confusing connection or configuration errors with verified poor health.
+- Offer Edit, Unwatch/Resume, Refresh, and Delete from each project’s accessible three-dot menu. Persist prior watch preferences when pausing, retain history, and confirm deletion.

@@ -108,6 +108,17 @@ test("desktop bridge persists notes/inventory, excludes credentials, rejects for
   const inventoryRefreshes = [];
   Module._load = function (request, ...args) {
     if (
+      request === "./github.cjs" &&
+      args[0]?.filename === path.resolve(__dirname, "../electron/main.cjs")
+    )
+      return {
+        requestGithub: async (_repo, _route, options) => {
+          if (options.credential === "invalid-token")
+            throw new Error("GitHub token is invalid");
+          return { login: "test-account" };
+        },
+      };
+    if (
       request === "./security.cjs" &&
       args[0]?.filename === path.resolve(__dirname, "../electron/main.cjs")
     ) {
@@ -179,6 +190,14 @@ test("desktop bridge persists notes/inventory, excludes credentials, rejects for
       "utf8",
     );
     assert.ok(!credentials.includes("super-secret-token"));
+    await assert.rejects(
+      invoke("connect", "github.com", "invalid-token"),
+      /token is invalid/,
+    );
+    assert.equal(
+      await fs.readFile(path.join(directory, "credentials.json"), "utf8"),
+      credentials,
+    );
     await invoke("exportData");
     const exported = await fs.readFile(
       path.join(directory, "export.json"),

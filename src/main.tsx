@@ -38,6 +38,9 @@ import { demo } from "./demo";
 import { expiration, toLocalInput } from "./expiry";
 import { InventoryEditor, ProjectSecurity, SecurityOverview } from "./Security";
 import { UpdateBanner } from "./UpdateBanner";
+import { ProjectActions } from "./ProjectActions";
+import { availabilityLabel } from "./availability";
+import { TechnologyBadge } from "./TechnologyBadge";
 import { TechnologyScan } from "./TechnologyScan";
 import { StartupChecks } from "./StartupChecks";
 import { initialTheme, type Theme } from "./themes";
@@ -50,6 +53,7 @@ const blank = {
   client: "",
   repo: "",
   url: "",
+  monitorKind: "website" as const,
   notes: "",
   technologies: [] as string[],
   watchSite: true,
@@ -197,7 +201,8 @@ function App() {
         (scope === "Watched projects"
           ? p.watchSite || p.watchRepo || p.watchSecurity
           : !p.watchSite && !p.watchRepo && !p.watchSecurity)) &&
-      (status === "All statuses" || p.status === status.toLowerCase()) &&
+      (status === "All statuses" ||
+        (!!p.url && p.status === status.toLowerCase())) &&
       `${p.name} ${p.client} ${[...p.technologies, ...(p.detectedTechnologies || [])].join(" ")}`
         .toLowerCase()
         .includes(query.toLowerCase()),
@@ -220,6 +225,52 @@ function App() {
     setEditing(p ? { ...p } : { ...blank });
     setModal("project");
     setError("");
+  };
+  const watching = (p: Project) =>
+    !!(p.watchSite || p.watchRepo || p.watchSecurity);
+  const toggleWatch = (p: Project) => {
+    if (!requireLive()) return;
+    const active = watching(p),
+      resume = (p.watchResume && Object.values(p.watchResume).some(Boolean)
+        ? p.watchResume
+        : undefined) || {
+        watchSite: !!p.url,
+        watchRepo: !!p.repo,
+        watchSecurity: !!p.watchSecurity,
+      };
+    run(async () => {
+      setState(
+        await api!.saveProject({
+          ...p,
+          watchResume: active
+            ? {
+                watchSite: p.watchSite,
+                watchRepo: p.watchRepo,
+                watchSecurity: !!p.watchSecurity,
+              }
+            : resume,
+          watchSite: !active && resume.watchSite,
+          watchRepo: !active && resume.watchRepo,
+          watchSecurity: !active && resume.watchSecurity,
+        }),
+      );
+      setToast(
+        active
+          ? "Project unwatched. Saved history is preserved."
+          : "Project monitoring resumed.",
+      );
+    });
+  };
+  const refreshProject = (p: Project) => {
+    if (requireLive())
+      run(async () => setState(await api!.refreshProject(p.id)));
+  };
+  const removeProject = (p: Project) => {
+    if (requireLive() && confirm(`Delete ${p.name} and its local history?`))
+      run(async () => {
+        setState(await api!.deleteProject(p.id));
+        if (selected?.id === p.id) setSelected(null);
+      });
   };
   const settings = () => {
     setModal("settings");
@@ -379,16 +430,20 @@ function App() {
             {[
               [
                 Globe,
-                "Online",
-                projects.filter((p) => p.status === "online").length,
-                "Operational websites",
+                projects.some((p) => p.monitorKind === "health" && p.url)
+                  ? "Healthy / online"
+                  : "Online",
+                projects.filter((p) => p.url && p.status === "online").length,
+                "Available websites and backends",
                 "green",
               ],
               [
                 Radio,
-                "Offline",
-                projects.filter((p) => p.status === "offline").length,
-                "Websites need attention",
+                projects.some((p) => p.monitorKind === "health" && p.url)
+                  ? "Unhealthy / offline"
+                  : "Offline",
+                projects.filter((p) => p.url && p.status === "offline").length,
+                "Services need attention",
                 "red",
               ],
               [
@@ -402,7 +457,7 @@ function App() {
                 FolderGit2,
                 "Projects in view",
                 projects.length,
-                `${projects.filter((p) => p.status === "unknown").length} with unknown website status`,
+                `${projects.filter((p) => !!p.url).length} with websites · ${projects.filter((p) => !!p.repo).length} with repositories`,
                 "blue",
               ],
             ].map(([Icon, label, value, description, color]) => {
@@ -416,12 +471,12 @@ function App() {
                   <div className="stat-value">
                     {value as number}
                     <span className="stat-line">
-                      {label === "Online" ? (
+                      {color === "green" ? (
                         <>
                           <i />
                           All clear
                         </>
-                      ) : label === "Offline" && Number(value) > 0 ? (
+                      ) : color === "red" && Number(value) > 0 ? (
                         <>
                           <i />
                           Needs a look
@@ -493,14 +548,14 @@ function App() {
               <label className="filter">
                 <SlidersHorizontal size={14} />
                 <select
-                  aria-label="Filter by website status"
+                  aria-label="Filter by availability status"
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
                 >
                   <option>All statuses</option>
-                  <option>Online</option>
-                  <option>Offline</option>
-                  <option>Unknown</option>
+                  <option value="Online">Online / Healthy</option>
+                  <option value="Offline">Offline / Unhealthy</option>
+                  <option value="Unknown">Unverified / Degraded</option>
                 </select>
               </label>
             </div>
@@ -550,28 +605,30 @@ function App() {
               <section className="project-grid">
                 {projects.map((p, i) => (
                   <article
-                    className={`project-card ${p.status === "offline" ? "attention" : ""}`}
+                    className={`project-card ${p.url && p.status === "offline" ? "attention" : ""}`}
                     key={p.id}
                   >
                     <div className="card-top">
                       <span className={`project-icon hue-${i % 4}`}>
                         {p.name.charAt(0)}
                       </span>
-                      <span className={`status ${p.status}`}>
-                        <i />
-                        {p.status === "unknown"
-                          ? "Unknown"
-                          : p.status === "online"
-                            ? "Online"
-                            : "Offline"}
-                      </span>
-                      <button
-                        className="icon-btn"
-                        title={`View ${p.name}`}
-                        onClick={() => setSelected(p)}
-                      >
-                        <MoreHorizontal size={18} />
-                      </button>
+                      {p.url && (
+                        <span
+                          className={`status ${!p.watchSite ? "unknown" : p.healthStatus === "degraded" && p.monitorKind === "health" ? "degraded" : p.status}`}
+                        >
+                          <i />
+                          {availabilityLabel(p)}
+                        </span>
+                      )}
+                      <ProjectActions
+                        name={p.name}
+                        watching={watching(p)}
+                        disabled={loading}
+                        edit={() => edit(p)}
+                        toggleWatch={() => toggleWatch(p)}
+                        refresh={() => refreshProject(p)}
+                        remove={() => removeProject(p)}
+                      />
                     </div>
                     <button
                       className="project-title"
@@ -600,10 +657,7 @@ function App() {
                       )
                         .slice(0, 4)
                         .map((t) => (
-                          <span key={t}>
-                            <i className={t.toLowerCase()} />
-                            {t}
-                          </span>
+                          <TechnologyBadge key={t} name={t} />
                         ))}
                       {p.technologies.length === 0 &&
                         !p.detectedTechnologies?.length && (
@@ -635,14 +689,22 @@ function App() {
                     )}
                     <div className="card-footer">
                       <span>
-                        <Globe size={13} />
-                        {p.status === "online"
-                          ? `${p.latency ?? "—"} ms`
-                          : p.status === "offline"
-                            ? "Check website"
-                            : p.checkedAt
-                              ? "Unable to verify"
-                              : "Awaiting first check"}
+                        {p.url ? <Globe size={13} /> : <GitBranch size={13} />}
+                        {!p.url
+                          ? "Repository only"
+                          : !p.watchSite
+                            ? p.monitorKind === "health"
+                              ? "Health monitoring paused"
+                              : "Website monitoring paused"
+                            : p.status === "online"
+                              ? `${p.latency ?? "—"} ms`
+                              : p.status === "offline"
+                                ? p.monitorKind === "health"
+                                  ? "Health check failed"
+                                  : "Check website"
+                                : p.checkedAt
+                                  ? "Unable to verify"
+                                  : "Awaiting first check"}
                       </span>
                       <div>
                         {p.repo && (
@@ -659,12 +721,17 @@ function App() {
                           </span>
                         )}
                         <button
-                          className={`watch-toggle ${p.watchRepo || p.watchSite ? "watching" : ""}`}
-                          title="Edit monitoring preferences"
-                          onClick={() => edit(p)}
+                          className={`watch-toggle ${watching(p) ? "watching" : ""}`}
+                          title={
+                            watching(p)
+                              ? "Unwatch project"
+                              : "Resume watching project"
+                          }
+                          disabled={loading}
+                          onClick={() => toggleWatch(p)}
                         >
                           <Radio size={13} />
-                          {p.watchRepo || p.watchSite ? "Watching" : "Paused"}
+                          {watching(p) ? "Watching" : "Resume watching"}
                         </button>
                       </div>
                     </div>
@@ -921,18 +988,16 @@ function App() {
                   ...(selected.detectedTechnologies || []),
                 ]),
               ).map((t) => (
-                <span key={t}>{t}</span>
+                <TechnologyBadge key={t} name={t} />
               ))}
             </div>
             <div className="info-box">
               {selected.url && (
                 <p>
-                  Website:{" "}
-                  {selected.watchSite
-                    ? selected.checkedAt
-                      ? selected.status
-                      : "Awaiting first check"
-                    : "Monitoring paused"}
+                  {selected.monitorKind === "health"
+                    ? "Backend health"
+                    : "Website"}
+                  : {availabilityLabel(selected)}
                 </p>
               )}
               {selected.repo && (
@@ -942,7 +1007,7 @@ function App() {
                     ? "Monitoring paused"
                     : selected.access === "connected" ||
                         selected.access === "public"
-                      ? `Monitoring repository${selected.access === "public" ? " · public access" : ""}`
+                      ? `Monitoring repository${selected.access === "public" ? " · public access" : ""}${selected.repoError ? " · some data unavailable" : ""}`
                       : selected.repoError || selected.repoCheckedAt
                         ? "Access needs attention"
                         : "Awaiting first check"}
@@ -972,7 +1037,9 @@ function App() {
                   onClick={() => open(selected.url)}
                 >
                   <Globe size={15} />
-                  Open website
+                  {selected.monitorKind === "health"
+                    ? "Open health endpoint"
+                    : "Open website"}
                   <ExternalLink size={13} />
                 </button>
               )}
@@ -994,6 +1061,17 @@ function App() {
                 <div className="info-box">
                   Repository monitoring needs attention. Your saved history
                   remains available. {selected.repoError}
+                  <button
+                    className="text-button"
+                    onClick={() => {
+                      const target = new URL(selected.repo);
+                      open(
+                        `${target.origin}/settings/${target.host === "github.com" ? "personal-access-tokens" : "tokens"}`,
+                      );
+                    }}
+                  >
+                    Review token access <ExternalLink size={13} />
+                  </button>
                 </div>
               )}
             {selected.repo && (
@@ -1154,11 +1232,33 @@ function App() {
                   </label>
                 </div>
                 <label>
-                  Website URL <span>optional if a repository is added</span>
+                  Availability monitor
+                  <select
+                    value={editing.monitorKind || "website"}
+                    onChange={(e) =>
+                      setEditing({
+                        ...editing,
+                        monitorKind: e.target.value as "website" | "health",
+                      })
+                    }
+                  >
+                    <option value="website">Website</option>
+                    <option value="health">Backend health endpoint</option>
+                  </select>
+                </label>
+                <label>
+                  {editing.monitorKind === "health"
+                    ? "Health endpoint URL"
+                    : "Website URL"}{" "}
+                  <span>optional if a repository is added</span>
                   <input
                     type="url"
                     value={editing.url || ""}
-                    placeholder="https://your-project.com"
+                    placeholder={
+                      editing.monitorKind === "health"
+                        ? "https://api.example.com/health"
+                        : "https://your-project.com"
+                    }
                     onChange={(e) =>
                       setEditing({ ...editing, url: e.target.value })
                     }
@@ -1172,20 +1272,28 @@ function App() {
                     value={editing.repo || ""}
                     placeholder="https://github.com/organization/repository"
                     onChange={(e) =>
-                      setEditing({ ...editing, repo: e.target.value })
+                      setEditing({
+                        ...editing,
+                        repo: e.target.value,
+                        detectedTechnologies: [],
+                      })
                     }
                   />
                 </label>
+                <p className="repository-url-help">
+                  Use the repository main page, for example
+                  https://github.com/fraval13/project-atlas or
+                  https://github.company.com/team/project.
+                </p>
                 <TechnologyScan
-                  api={api}
+                  api={preview ? undefined : api}
                   repo={editing.repo || ""}
-                  apply={(names) =>
-                    setEditing({
-                      ...editing,
-                      technologies: [
-                        ...new Set([...(editing.technologies || []), ...names]),
-                      ],
-                    })
+                  detected={(source, names) =>
+                    setEditing((current) =>
+                      current && current.repo === source
+                        ? { ...current, detectedTechnologies: names }
+                        : current,
+                    )
                   }
                 />
                 <label>
@@ -1317,7 +1425,9 @@ function App() {
                         setEditing({ ...editing, watchSite: e.target.checked })
                       }
                     />
-                    Monitor website availability
+                    {editing.monitorKind === "health"
+                      ? "Monitor backend health"
+                      : "Monitor website availability"}
                   </label>
                   {editing.repo && (
                     <label>
@@ -1391,7 +1501,9 @@ function App() {
                     try {
                       const target = new URL(`https://${host}`);
                       if (target.host !== host) throw new Error();
-                      open(`${target.origin}/settings/tokens`);
+                      open(
+                        `${target.origin}/settings/${target.host === "github.com" ? "personal-access-tokens" : "tokens"}`,
+                      );
                     } catch {
                       setError("Enter a valid GitHub host first.");
                     }
@@ -1408,7 +1520,7 @@ function App() {
                         setCredential("");
                         setAccounts(await api!.accounts());
                         setToast(
-                          "Connection saved. Refresh to load repository data.",
+                          "Token verified and saved. Refresh a project to check its repository permissions.",
                         );
                       });
                   }}
