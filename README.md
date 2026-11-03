@@ -106,7 +106,7 @@ Website checks run every minute; repository checks run every five minutes. Manua
 
 ## Connect GitHub
 
-Connect directly from the startup checklist, or open **Settings & connections** and enter `github.com` or your GitHub Enterprise host, followed by a personal access token. Atlas verifies the token before saving it; each repository’s permissions are checked separately. For a fine-grained token, select the correct resource owner and explicitly include the private repositories you want to monitor. Each host has a separate connection. Enterprise uses the standard `/api/v3` endpoint and system certificate trust.
+A short guide beside both token fields lists the required read permissions and explains repository selection and organization approval. Connect directly from the startup checklist, or open **Settings & connections** and enter `github.com` or your GitHub Enterprise host, followed by a personal access token. Atlas verifies the token before saving it; each repository’s permissions are checked separately. For a fine-grained token, select the correct resource owner and explicitly include the private repositories you want to monitor. Each host has a separate connection. Enterprise uses the standard `/api/v3` endpoint and system certificate trust.
 
 Public repositories can be monitored without a token, subject to GitHub’s anonymous API limits. The startup checklist includes optional token availability checks and host-specific **personal access token settings** links. A stored token does not guarantee repository permission.
 
@@ -124,7 +124,7 @@ Project details show the schedule and countdown. An orange hourglass appears wit
 
 ## Local vulnerability watch
 
-Enable security monitoring for a project and add its exact-version dependency inventory. Atlas downloads public GitHub advisories and NVD CVE feeds hourly and matches them locally. Package inventories, code, and repository credentials stay on your device. **Security → Check now** runs the job immediately.
+Enable security monitoring for a project and add its exact-version dependency inventory. Atlas downloads public GitHub advisories and NVD CVE feeds hourly and matches them locally. Dependency inventories are matched on your device and are never included in advisory requests. If a GitHub.com token is saved, Atlas uses it only for GitHub API requests, including the public advisory feed, to use the authenticated rate limit. It is never sent to NVD or monitored endpoints; Enterprise credentials are used only with their configured Enterprise API. GitHub feed rate limits show a retry time and retain cached results. **Security → Check now** runs the job immediately.
 
 Warnings include advisory links, severity, CVSS scores when available, component versions, patch information, and match confidence. New matches create notifications and timeline entries after the initial baseline. Feed freshness and download errors are visible alongside cached results.
 

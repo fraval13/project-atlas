@@ -2147,3 +2147,64 @@ h3 {
   background: var(--theme-warning-surface, #302b1b);
   color: var(--theme-warning, #e1c589);
 }
+
+.github-token-guide {
+  padding: 12px 14px;
+  background: var(--theme-info-surface, #172737);
+  border-left: 2px solid var(--theme-accent, #79c4a8);
+  border-radius: 5px;
+  margin: 0 0 16px;
+  color: var(--theme-muted, #b4bfd0);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.startup-github-access .github-token-guide {
+  margin: 0;
+}
+.github-token-guide h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--theme-text, #e8eaf3);
+}
+.github-token-permissions {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+.github-token-permissions dt {
+  font-weight: 600;
+  color: var(--theme-text, #e8eaf3);
+}
+.github-token-permissions dt span {
+  font-weight: 400;
+  color: var(--theme-accent, #79c4a8);
+  margin-left: 8px;
+  white-space: nowrap;
+}
+.github-token-permissions dd {
+  margin: 0;
+  font-size: 10px;
+}
+.github-token-guide p,
+.startup-item .github-token-guide p {
+  font-size: 10px;
+  line-height: 1.6;
+  margin: 10px 0 0;
+}
+.github-token-guide summary {
+  cursor: pointer;
+  margin-top: 10px;
+  color: var(--theme-text, #e8eaf3);
+  font-weight: 500;
+}
+.github-token-guide summary:focus-visible {
+  outline: 2px solid var(--theme-border-strong, #57d7bd);
+  outline-offset: 3px;
+}
+.github-token-guide ol {
+  padding-left: 18px;
+  margin: 8px 0 0;
+}
+.github-token-guide li + li {
+  margin-top: 5px;
+}

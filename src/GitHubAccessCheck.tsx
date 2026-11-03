@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ExternalLink, KeyRound, Loader2 } from "lucide-react";
+import { GitHubTokenGuide } from "./GitHubTokenGuide";
 import type { API } from "./types";
 
 export function GitHubAccessCheck({
@@ -47,6 +48,7 @@ export function GitHubAccessCheck({
       >
         Open personal access token settings <ExternalLink size={13} />
       </button>
+      <GitHubTokenGuide />
       <div className="startup-token-controls">
         <label className="startup-token-field">
           Personal access token for {host}

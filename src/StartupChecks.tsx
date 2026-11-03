@@ -139,7 +139,7 @@ export function StartupChecks({
                   </b>
                 </h3>
                 <p>{check.detail}</p>
-                {check.host && api && check.status !== "ready" && (
+                {check.host && api && !settings && check.status !== "ready" && (
                   <GitHubAccessCheck
                     api={api}
                     host={check.host}

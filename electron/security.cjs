@@ -282,8 +282,11 @@ async function readResponse(response, limit) {
 }
 async function syncGhsa(
   cache,
-  { fetcher = fetch, now = () => new Date() } = {},
+  { fetcher = fetch, now = () => new Date(), credential = "" } = {},
 ) {
+  if (cache.ghsa?.retryAt && Date.parse(cache.ghsa.retryAt) > now().getTime())
+    return;
+  let authentication = credential;
   const started = now().toISOString(),
     since = cache.ghsa?.lastComplete
       ? new Date(Date.parse(cache.ghsa.lastComplete) - 86400000).toISOString()
@@ -298,6 +301,8 @@ async function syncGhsa(
       ? cache.ghsa.cycleStarted || started
       : started,
     error: "",
+    warning: "",
+    retryAt: "",
     status: "syncing",
   };
   const records = new Map((cache.records || []).map((r) => [r.id, r]));
@@ -305,11 +310,56 @@ async function syncGhsa(
     for (let page = 0; url && page < 20; page++) {
       if (!url.startsWith("https://api.github.com/advisories?"))
         throw new Error("Invalid advisory pagination URL");
-      const response = await fetcher(url, {
-        headers: { Accept: "application/vnd.github+json" },
-        signal: AbortSignal.timeout(30000),
-        redirect: "error",
-      });
+      const request = () =>
+        fetcher(url, {
+          headers: {
+            Accept: "application/vnd.github+json",
+            ...(authentication
+              ? { Authorization: `Bearer ${authentication}` }
+              : {}),
+          },
+          signal: AbortSignal.timeout(30000),
+          redirect: "error",
+        });
+      let response = await request();
+      if (response.status === 401 && authentication) {
+        await response.body?.cancel();
+        authentication = "";
+        cache.ghsa.warning =
+          "The stored GitHub.com token was rejected. Public advisories are being fetched anonymously; reconnect GitHub.com to restore the higher rate limit.";
+        response = await request();
+      }
+      if (!response.ok) {
+        const limited =
+          response.status === 429 ||
+          (response.status === 403 &&
+            (response.headers.get("x-ratelimit-remaining") === "0" ||
+              response.headers.has("retry-after")));
+        if (response.status === 403 || response.status === 429) {
+          const current = now().getTime();
+          const reset =
+            Number(response.headers.get("x-ratelimit-reset")) * 1000;
+          const raw = response.headers.get("retry-after");
+          const after =
+            raw === null
+              ? NaN
+              : /^\d+(?:\.\d+)?$/.test(raw)
+                ? current + Number(raw) * 1000
+                : Date.parse(raw);
+          const retry = Math.max(
+            current + 60000,
+            Number.isFinite(reset) ? reset : 0,
+            Number.isFinite(after) ? after : 0,
+          );
+          cache.ghsa.retryAt = new Date(retry).toISOString();
+        }
+        await response.body?.cancel();
+        throw new Error(
+          limited
+            ? `GitHub advisory feed rate limit reached (${response.status}). ${authentication ? "Atlas will retry after GitHub's reset time." : "Save a GitHub.com token for the higher authenticated limit, or wait for the retry time."} This is separate from private repository permissions.`
+            : `GitHub advisory feed returned HTTP ${response.status}. Check token validity or network policy; this public feed does not require private repository permissions.`,
+        );
+      }
       const rows = JSON.parse(
         (await readResponse(response, 20000000)).toString(),
       );

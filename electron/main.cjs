@@ -126,7 +126,10 @@ async function securityJob(force = false, projectId) {
   if (!projectId) securityAttemptAt = Date.now();
   state.feedInfo = { ...state.feedInfo, syncing: true };
   try {
-    await Promise.all([syncGhsa(feedCache), syncNvd(feedCache)]);
+    await Promise.all([
+      syncGhsa(feedCache, { credential: token("github.com") }),
+      syncNvd(feedCache),
+    ]);
     await fs.writeFile(file("security-cache.tmp"), JSON.stringify(feedCache));
     await fs.rename(file("security-cache.tmp"), file("security-cache.json"));
     for (const p of state.projects.filter(
@@ -500,6 +503,7 @@ app.whenReady().then(async () => {
         p.access = "disconnected";
         p.repoAttemptAt = null;
       }
+    if (host === "github.com" && feedCache.ghsa) delete feedCache.ghsa.retryAt;
     await persist();
     return true;
   });

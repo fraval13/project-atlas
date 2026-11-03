@@ -106,6 +106,7 @@ test("desktop bridge persists notes/inventory, excludes credentials, rejects for
     shell: { openExternal: async () => {} },
   };
   const inventoryRefreshes = [];
+  const feedCredentials = [];
   Module._load = function (request, ...args) {
     if (
       request === "./github.cjs" &&
@@ -124,10 +125,12 @@ test("desktop bridge persists notes/inventory, excludes credentials, rejects for
     ) {
       return {
         ...originalLoad.call(this, request, ...args),
-        syncGhsa: async (cache) => {
+        syncGhsa: async (cache, options) => {
+          feedCredentials.push(options?.credential);
           cache.ghsa = { status: "ready" };
         },
-        syncNvd: async (cache) => {
+        syncNvd: async (cache, options) => {
+          assert.equal(options, undefined);
           cache.nvd = { status: "ready" };
         },
       };
@@ -223,6 +226,7 @@ test("desktop bridge persists notes/inventory, excludes credentials, rejects for
     }
     state = await invoke("refreshProject", state.projects[0].id);
     assert.deepEqual(inventoryRefreshes, [state.projects[0].id]);
+    assert.deepEqual(feedCredentials, ["super-secret-token"]);
     assert.deepEqual(state.projects[0].security.findings, []);
     assert.equal(state.projects[1].security.findings[0].id, "obsolete-finding");
     for (const p of state.projects) p.watchSecurity = false;

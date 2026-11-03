@@ -377,6 +377,14 @@ export function SecurityOverview({
                   {source.error} · saved results remain available.
                 </p>
               )}
+              {source?.retryAt && (
+                <p className="feed-error">
+                  Next feed retry: {formatDate(source.retryAt)}.
+                </p>
+              )}
+              {source?.warning && (
+                <p className="feed-error">{source.warning}</p>
+              )}
               {source?.gap && <p className="feed-error">{source.gap}</p>}
             </div>
           );

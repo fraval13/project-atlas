@@ -51,6 +51,8 @@ export type Finding = {
   confidence: "affected" | "review";
 };
 export type FeedSource = {
+  retryAt?: string;
+  warning?: string;
   status?: string;
   checkedAt?: string;
   coverageStart?: string;

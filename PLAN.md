@@ -85,3 +85,5 @@ OAuth/device authorization, configurable monitoring schedules, encrypted peer-to
 
 - Support backend health endpoints alongside website monitors, recognizing common plain-text/JSON health states with bounded responses. Show Healthy/Unhealthy/Degraded without confusing connection or configuration errors with verified poor health.
 - Offer Edit, Unwatch/Resume, Refresh, and Delete from each project’s accessible three-dot menu. Persist prior watch preferences when pausing, retain history, and confirm deletion.
+
+- Show the minimum read-only token permissions beside startup and Settings token fields. Authenticate public advisory downloads with the saved GitHub.com credential only, never Enterprise credentials or project inventory, and respect rate-limit reset/retry headers while retaining cached findings.

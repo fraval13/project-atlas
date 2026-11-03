@@ -229,7 +229,7 @@ test("withdrawn records disappear and fresh notifications are deduplicated", () 
   );
   assert.equal(p.security.findings.length, 0);
 });
-test("global advisory job sends no package inventory or authorization and follows pagination", async () => {
+test("anonymous advisory job omits inventory and authorization and follows pagination", async () => {
   const cache = { records: [] };
   let calls = 0;
   await syncGhsa(cache, {
@@ -450,4 +450,108 @@ test("glob cancellation advisory excludes the patched release and the unaffected
     matchAdvisories({ inventory: components }, [record]).findings,
     [],
   );
+});
+
+test("GitHub advisory downloads can authenticate without uploading inventory or following redirects", async () => {
+  const cache = { records: [] };
+  let calls = 0;
+  await syncGhsa(cache, {
+    credential: "github-com-token",
+    fetcher: async (url, options) => {
+      calls++;
+      assert.equal(new URL(url).origin, "https://api.github.com");
+      assert.equal(options.headers.Authorization, "Bearer github-com-token");
+      assert.equal(options.redirect, "error");
+      assert.equal(options.body, undefined);
+      assert.equal(new URL(url).searchParams.has("affects"), false);
+      return new Response(JSON.stringify([advisory()]), {
+        headers: {
+          link: '<https://other.example/advisories?after=next>; rel="next"',
+        },
+      });
+    },
+  });
+  assert.equal(calls, 1);
+  assert.equal(cache.ghsa.status, "error");
+  assert.match(cache.ghsa.error, /pagination URL/);
+  assert.equal(cache.records.length, 1);
+  assert.doesNotMatch(JSON.stringify(cache), /github-com-token/);
+});
+
+test("advisory rate limits respect retry headers and preserve cached findings", async () => {
+  const start = new Date("2026-11-03T12:00:00Z"),
+    cache = {
+      records: [normalizeGhsa(advisory())],
+      ghsa: { checkedAt: "2026-11-02T12:00:00Z" },
+    };
+  let calls = 0;
+  const options = {
+    now: () => start,
+    credential: "github-token",
+    fetcher: async () => {
+      calls++;
+      return new Response("", {
+        status: 403,
+        headers: {
+          "x-ratelimit-remaining": "0",
+          "x-ratelimit-reset": String(start.getTime() / 1000 + 300),
+          "retry-after": "120",
+        },
+      });
+    },
+  };
+  await syncGhsa(cache, options);
+  assert.match(cache.ghsa.error, /advisory feed rate limit/);
+  assert.match(
+    cache.ghsa.error,
+    /separate from private repository permissions/,
+  );
+  assert.equal(cache.ghsa.retryAt, "2026-11-03T12:05:00.000Z");
+  assert.equal(cache.ghsa.checkedAt, "2026-11-02T12:00:00Z");
+  assert.equal(cache.records.length, 1);
+  await syncGhsa(cache, options);
+  assert.equal(calls, 1);
+  await syncGhsa(cache, {
+    now: () => new Date(start.getTime() + 301000),
+    credential: "github-token",
+    fetcher: async () => new Response("[]"),
+  });
+  assert.equal(cache.ghsa.status, "ready");
+  assert.equal(cache.ghsa.retryAt, "");
+});
+
+test("expired advisory credentials fall back to anonymous public access without losing data", async () => {
+  const cache = { records: [] };
+  let calls = 0;
+  await syncGhsa(cache, {
+    credential: "expired-token",
+    fetcher: async (_, options) => {
+      calls++;
+      if (calls === 1) {
+        assert.equal(options.headers.Authorization, "Bearer expired-token");
+        return new Response("", { status: 401 });
+      }
+      assert.equal(options.headers.Authorization, undefined);
+      return new Response(JSON.stringify([advisory()]));
+    },
+  });
+  assert.equal(calls, 2);
+  assert.equal(cache.ghsa.status, "ready");
+  assert.match(cache.ghsa.warning, /rejected/);
+  assert.equal(cache.records.length, 1);
+  assert.doesNotMatch(JSON.stringify(cache), /expired-token/);
+});
+
+test("non-rate-limit advisory 403s do not ask for broader repository permissions", async () => {
+  const cache = { records: [] };
+  await syncGhsa(cache, {
+    fetcher: async () =>
+      new Response("", {
+        status: 403,
+        headers: { "x-ratelimit-remaining": "123" },
+      }),
+  });
+  assert.match(cache.ghsa.error, /returned HTTP 403/);
+  assert.doesNotMatch(cache.ghsa.error, /rate limit reached/);
+  assert.ok(cache.ghsa.retryAt);
 });

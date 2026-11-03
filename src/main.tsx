@@ -38,6 +38,7 @@ import { demo } from "./demo";
 import { expiration, toLocalInput } from "./expiry";
 import { InventoryEditor, ProjectSecurity, SecurityOverview } from "./Security";
 import { UpdateBanner } from "./UpdateBanner";
+import { GitHubTokenGuide } from "./GitHubTokenGuide";
 import { ProjectActions } from "./ProjectActions";
 import { availabilityLabel } from "./availability";
 import { TechnologyBadge } from "./TechnologyBadge";
@@ -1533,6 +1534,7 @@ function App() {
                       placeholder="github.com or github.company.com"
                     />
                   </label>
+                  <GitHubTokenGuide />
                   <label>
                     Personal access token
                     <input

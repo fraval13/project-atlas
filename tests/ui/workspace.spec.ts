@@ -846,3 +846,75 @@ test("backend health monitor settings persist and use healthy labels", async ({
     page.getByRole("button", { name: "Open health endpoint" }),
   ).toBeVisible();
 });
+
+test("token setup guide is visible in startup and Settings with required Contents permission", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    (window as any).atlas = {
+      state: async () => ({ version: 1, projects: [], updatedAt: null }),
+      accounts: async () => [],
+      systemCheck: async () => ({
+        checkedAt: new Date().toISOString(),
+        checks: [
+          {
+            id: "github:github.com",
+            host: "github.com",
+            name: "GitHub token",
+            status: "missing",
+            required: false,
+            detail: "Token optional for public repositories",
+            remedy: "Save a token for private access.",
+          },
+        ],
+      }),
+    };
+  });
+  await page.goto("/");
+  const startup = page.locator(".startup-github-access .github-token-guide");
+  await expect(startup).toContainText("Contents");
+  await expect(startup).toContainText("Pull requests");
+  await expect(startup).toContainText("Metadata");
+  await expect(startup).toContainText("No write permissions are needed");
+  await expect(startup).toContainText("selects repositories, not permissions");
+  await page.getByRole("button", { name: "Settings & connections" }).click();
+  const guide = page.getByRole("dialog").locator("form>.github-token-guide");
+  await expect(guide).toBeVisible();
+  await guide.locator("summary").click();
+  await expect(guide).toContainText("Resource owner");
+  await expect(guide).toContainText(
+    "Editing permissions keeps the existing token string",
+  );
+});
+
+test("advisory feed failures show rate-limit retry timing separately from repository permissions", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    (window as any).atlas = {
+      state: async () => ({
+        version: 1,
+        projects: [],
+        updatedAt: null,
+        feedInfo: {
+          recordCount: 42,
+          ghsa: {
+            status: "error",
+            error:
+              "GitHub advisory feed rate limit reached. This is separate from private repository permissions.",
+            retryAt: "2026-11-03T16:00:00Z",
+          },
+          nvd: { status: "ready" },
+        },
+      }),
+    };
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Security", exact: true }).click();
+  await expect(
+    page
+      .locator(".feed-error")
+      .filter({ hasText: "separate from private repository permissions" }),
+  ).toBeVisible();
+  await expect(page.getByText(/Next feed retry:/)).toBeVisible();
+});
