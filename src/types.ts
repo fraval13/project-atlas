@@ -133,6 +133,7 @@ export type Project = {
   repoError?: string;
 };
 export type State = {
+  monitoring?: boolean;
   feedInfo?: FeedInfo;
   version: number;
   projects: Project[];
@@ -144,6 +145,7 @@ export type TechnologyScan = {
   warnings: string[];
 };
 export type API = {
+  onMonitoring?: (callback: (active: boolean) => void) => () => void;
   markActivitySeen: (
     groups: { projectId: string; eventIds: string[] }[],
   ) => Promise<State>;

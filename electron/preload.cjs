@@ -1,7 +1,11 @@
 const { contextBridge, ipcRenderer } = require("electron");
-contextBridge.exposeInMainWorld(
-  "atlas",
-  Object.fromEntries(
+contextBridge.exposeInMainWorld("atlas", {
+  onMonitoring: (callback) => {
+    const listener = (_event, active) => callback(active);
+    ipcRenderer.on("atlas:monitoring", listener);
+    return () => ipcRenderer.removeListener("atlas:monitoring", listener);
+  },
+  ...Object.fromEntries(
     [
       "state",
       "markActivitySeen",
@@ -30,4 +34,4 @@ contextBridge.exposeInMainWorld(
       (...args) => ipcRenderer.invoke(`atlas:${name}`, ...args),
     ]),
   ),
-);
+});

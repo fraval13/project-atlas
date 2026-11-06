@@ -2113,7 +2113,7 @@ h3 {
   box-shadow: 0 12px 30px #0005;
   z-index: 30;
 }
-.project-action-menu > button {
+.project-action-menu > .refresh-control > button {
   display: flex;
   width: 100%;
   justify-content: flex-start;
@@ -2122,12 +2122,12 @@ h3 {
   font-size: 12px;
   white-space: nowrap;
 }
-.project-action-menu > button:hover,
-.project-action-menu > button:focus-visible {
+.project-action-menu > .refresh-control > button:hover,
+.project-action-menu > .refresh-control > button:focus-visible {
   background: var(--theme-info-surface, #29374a);
   color: var(--theme-text, #fff);
 }
-.project-action-menu > .project-action-delete {
+.project-action-menu > .refresh-control > .project-action-delete {
   color: var(--theme-danger, #f19d9d);
   border-top: 1px solid var(--theme-border, #394456);
   border-radius: 0;
@@ -2230,4 +2230,42 @@ h3 {
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+.refresh-control {
+  position: relative;
+  display: inline-flex;
+}
+.refresh-control:has([role="menuitem"]) {
+  display: flex;
+}
+.refresh-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  width: 240px;
+  padding: 10px;
+  z-index: 20;
+  background: var(--theme-surface, #151a26);
+  color: var(--theme-text, #fff);
+  border: 1px solid var(--theme-border, #2b3040);
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.refresh-control:hover > .refresh-tooltip,
+.refresh-control:focus-within > .refresh-tooltip {
+  display: block;
+}
+.refresh-control > button:disabled {
+  pointer-events: none;
+}
+.project-action-menu button[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.project-action-menu > .refresh-control > button {
+  width: 100%;
 }

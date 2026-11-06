@@ -74,9 +74,14 @@ function notify(p, body) {
   if (p.notify && Notification.isSupported())
     new Notification({ title: p.name, body }).show();
 }
+function publishMonitoring() {
+  if (win && !win.isDestroyed?.())
+    win.webContents.send?.("atlas:monitoring", busy || securityBusy);
+}
 async function poll(force = false, projectId) {
   if (busy || !workspaceReady) return state;
   busy = true;
+  publishMonitoring();
   try {
     const pending = state.projects.filter(
       (p) => !projectId || p.id === projectId,
@@ -112,6 +117,7 @@ async function poll(force = false, projectId) {
     return state;
   } finally {
     busy = false;
+    publishMonitoring();
   }
 }
 async function securityJob(force = false, projectId) {
@@ -125,6 +131,7 @@ async function securityJob(force = false, projectId) {
     return state;
   if (!force && Date.now() - securityAttemptAt < 3600000) return state;
   securityBusy = true;
+  publishMonitoring();
   if (!projectId) securityAttemptAt = Date.now();
   state.feedInfo = { ...state.feedInfo, syncing: true };
   try {
@@ -164,6 +171,7 @@ async function securityJob(force = false, projectId) {
   } finally {
     securityBusy = false;
     state.feedInfo = { ...state.feedInfo, syncing: false };
+    publishMonitoring();
   }
 }
 function createWindow() {
@@ -285,7 +293,7 @@ app.whenReady().then(async () => {
   handle("checkUpdate", () => updates.check());
   handle("downloadUpdate", () => updates.download());
   handle("installUpdate", () => updates.install());
-  handle("state", () => state);
+  handle("state", () => ({ ...state, monitoring: busy || securityBusy }));
   handle("markActivitySeen", async (groups) => {
     const changed = markActivitySeen(state.projects, groups);
     try {
@@ -379,13 +387,13 @@ app.whenReady().then(async () => {
   handle("refreshProject", async (id) => {
     if (typeof id !== "string" || !state.projects.some((p) => p.id === id))
       throw new Error("Project not found.");
-    if (busy || securityBusy)
-      throw new Error("Monitoring is running. Try again shortly.");
+    if (busy || securityBusy) return state;
     await poll(true, id);
     await securityJob(true, id);
     return state;
   });
   handle("refresh", async () => {
+    if (busy || securityBusy) return state;
     await poll(true);
     await securityJob(true);
     return state;
@@ -458,6 +466,7 @@ app.whenReady().then(async () => {
     if (stat.size > 250000000)
       throw new Error("Feed must be smaller than 250 MB.");
     securityBusy = true;
+    publishMonitoring();
     try {
       const records = importFeed(
         JSON.parse(await fs.readFile(result.filePaths[0], "utf8")),
@@ -481,6 +490,7 @@ app.whenReady().then(async () => {
       return state;
     } finally {
       securityBusy = false;
+      publishMonitoring();
     }
   });
   handle("accounts", () =>

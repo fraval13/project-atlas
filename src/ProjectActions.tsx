@@ -1,3 +1,4 @@
+import { RefreshControl } from "./RefreshControl";
 import { useEffect, useRef, useState } from "react";
 import {
   MoreHorizontal,
@@ -13,6 +14,7 @@ export function ProjectActions({
   disabled,
   edit,
   toggleWatch,
+  refreshReason,
   refresh,
   remove,
 }: {
@@ -21,6 +23,7 @@ export function ProjectActions({
   disabled: boolean;
   edit: () => void;
   toggleWatch: () => void;
+  refreshReason: string;
   refresh: () => void;
   remove: () => void;
 }) {
@@ -114,19 +117,26 @@ export function ProjectActions({
           }}
         >
           {actions.map(({ label, Icon, action }) => (
-            <button
-              type="button"
-              role="menuitem"
-              className={label === "Delete" ? "project-action-delete" : ""}
+            <RefreshControl
               key={label}
-              onClick={() => {
-                close();
-                action();
-              }}
+              reason={label === "Refresh" ? refreshReason : ""}
             >
-              <Icon size={14} />
-              {label}
-            </button>
+              <button
+                aria-disabled={label === "Refresh" && !!refreshReason}
+                type="button"
+                role="menuitem"
+                className={label === "Delete" ? "project-action-delete" : ""}
+                key={label}
+                onClick={() => {
+                  if (label === "Refresh" && refreshReason) return;
+                  close();
+                  action();
+                }}
+              >
+                <Icon size={14} />
+                {label}
+              </button>
+            </RefreshControl>
           ))}
         </span>
       )}

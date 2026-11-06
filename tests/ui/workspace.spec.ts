@@ -1282,3 +1282,66 @@ test("failed read-state persistence keeps activity unread and permits retry on a
   await activity.click();
   await expect(badge).toHaveText("0");
 });
+
+test("refresh follows background sync state and explains disabled controls", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    (window as any).atlas = {
+      state: async () => ({
+        version: 1,
+        projects: [
+          {
+            id: "one",
+            name: "New project",
+            client: "",
+            repo: "",
+            url: "",
+            technologies: [],
+            events: [],
+            prs: [],
+            watchSite: true,
+            watchRepo: false,
+            status: "unknown",
+          },
+        ],
+        updatedAt: null,
+        monitoring: true,
+      }),
+      onMonitoring: (callback: (active: boolean) => void) => {
+        (window as any).monitoringChanged = callback;
+        return () => {};
+      },
+      refresh: async () => {
+        (window as any).refreshCalls = ((window as any).refreshCalls || 0) + 1;
+        return new Promise(() => {});
+      },
+    };
+  });
+  await page.goto("/");
+  const refresh = page.getByRole("button", { name: "Refresh monitoring" });
+  await expect(refresh).toBeDisabled();
+  await refresh.locator("..").hover();
+  await expect(page.getByRole("tooltip")).toContainText("Sync in progress");
+  await page.locator(".project-title").click();
+  await expect(
+    page.getByRole("button", { name: "Refresh project", exact: true }),
+  ).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Actions for New project" }).click();
+  const menuRefresh = page.getByRole("menuitem", {
+    name: "Refresh",
+    exact: true,
+  });
+  await expect(menuRefresh).toHaveAttribute("aria-disabled", "true");
+  await menuRefresh.focus();
+  await expect(page.getByRole("tooltip").last()).toBeVisible();
+  await menuRefresh.press("Enter");
+  expect(await page.evaluate(() => (window as any).refreshCalls || 0)).toBe(0);
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => (window as any).monitoringChanged(false));
+  await expect(refresh).toBeEnabled();
+  await refresh.click();
+  await expect(refresh).toBeDisabled();
+  expect(await page.evaluate(() => (window as any).refreshCalls)).toBe(1);
+});

@@ -1,3 +1,4 @@
+import { RefreshControl } from "./RefreshControl";
 import React, { useEffect, useLayoutEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -100,6 +101,7 @@ function App() {
     [editing, setEditing] = useState<Partial<Project>>(blank),
     [selected, setSelected] = useState<Project | null>(null),
     [loading, setLoading] = useState(false),
+    [monitoring, setMonitoring] = useState(false),
     [error, setError] = useState(""),
     [toast, setToast] = useState(""),
     [accounts, setAccounts] = useState<{ host: string; available: boolean }[]>(
@@ -144,6 +146,20 @@ function App() {
     };
   }, [modal, selected?.id]);
   const api = window.atlas;
+  const refreshReason =
+    monitoring || state.monitoring || state.feedInfo?.syncing
+      ? "Sync in progress. Refresh will be available when it finishes."
+      : loading
+        ? "Please wait for the current operation to finish."
+        : "";
+  useEffect(
+    () =>
+      api?.onMonitoring?.((active) => {
+        setMonitoring(active);
+        setState((old) => ({ ...old, monitoring: active }));
+      }),
+    [api],
+  );
   const [, setClock] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setClock((n) => n + 1), 30000);
@@ -656,17 +672,22 @@ function App() {
                       ? `Updated ${ago(shown.updatedAt)}`
                       : "Ready when you are"}
                   </span>
-                  <button
-                    className="icon-btn"
-                    aria-label="Refresh monitoring"
-                    disabled={loading}
-                    onClick={() => {
-                      if (requireLive())
-                        run(async () => setState(await api!.refresh()));
-                    }}
-                  >
-                    <Activity size={15} className={loading ? "spin" : ""} />
-                  </button>
+                  <RefreshControl reason={refreshReason}>
+                    <button
+                      className="icon-btn"
+                      aria-label="Refresh monitoring"
+                      disabled={!!refreshReason}
+                      onClick={() => {
+                        if (requireLive())
+                          run(async () => setState(await api!.refresh()));
+                      }}
+                    >
+                      <Activity
+                        size={15}
+                        className={refreshReason ? "spin" : ""}
+                      />
+                    </button>
+                  </RefreshControl>
                 </div>
               </div>
               <section className="project-grid">
@@ -693,6 +714,7 @@ function App() {
                         disabled={loading}
                         edit={() => edit(p)}
                         toggleWatch={() => toggleWatch(p)}
+                        refreshReason={refreshReason}
                         refresh={() => refreshProject(p)}
                         remove={() => removeProject(p)}
                       />
@@ -1083,19 +1105,21 @@ function App() {
                     : ""}
                 </p>
               )}
-              <button
-                className="secondary"
-                disabled={loading}
-                onClick={() => {
-                  if (requireLive())
-                    run(async () => {
-                      setState(await api!.refreshProject(selected.id));
-                    });
-                }}
-              >
-                <RefreshCw size={14} />
-                Refresh project
-              </button>
+              <RefreshControl reason={refreshReason}>
+                <button
+                  className="secondary"
+                  disabled={!!refreshReason}
+                  onClick={() => {
+                    if (requireLive())
+                      run(async () => {
+                        setState(await api!.refreshProject(selected.id));
+                      });
+                  }}
+                >
+                  <RefreshCw size={14} />
+                  Refresh project
+                </button>
+              </RefreshControl>
             </div>
             <div className="detail-links">
               {selected.url && (
