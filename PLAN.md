@@ -90,3 +90,10 @@ OAuth/device authorization, configurable monitoring schedules, encrypted peer-to
 
 - Show filtered critical/high CVE match counts in Security navigation, and unread activity counts in Activity navigation. Persist per-event read markers, acknowledge only the filtered stream viewed in a foreground Activity tab, and keep hidden/tray/modal activity unread. Treat existing history as seen without clearing explicitly unread records.
 - Retain the last verified availability separately from startup/unverified display status. Log initial availability and real transitions, suppress unchanged refresh/restart entries, and log each monitoring-error period once without repeating an unchanged verified state on recovery.
+
+## Multiple repository accounts and providers
+
+- Support multiple encrypted accounts per GitHub.com/Enterprise host, Azure DevOps Services organization, and Bitbucket Cloud. Preserve existing host credentials during migration; removing one account must leave the others usable.
+- Try only credentials scoped to the repository provider/host (and Azure organization), remember successful accounts in memory, and try alternatives on access failures. Retain anonymous access to public repositories. Never forward credentials through redirects or provider-supplied pagination links to another origin.
+- Use provider APIs for repository activity, open pull requests, bounded manifest detection and dependency inventories. Keep existing history on partial access failures. Show the provider and successful account in the UI.
+- Explain provider-specific read permissions. Azure DevOps Server and Bitbucket Data Center are outside this implementation; GitHub Enterprise remains supported. Test account fallback, credential migration/isolation, provider URLs, API normalization and UI account management.

@@ -113,7 +113,7 @@ async function checkRepository(
     if (!valid.some(Boolean))
       throw new Error(
         results.find((r) => r.status === "rejected")?.reason?.message ||
-          "Unexpected GitHub response.",
+          "Unexpected repository response.",
       );
     if (valid[0]) p.detectedTechnologies = Object.keys(results[0].value);
     if (valid[1]) {
@@ -145,13 +145,17 @@ async function checkRepository(
               .replace(/([a-z])([A-Z])/g, "$1 $2")}`,
             at: e.created_at,
           });
-    p.access = authenticated ? "connected" : "public";
+    p.access = (
+      typeof authenticated === "function" ? authenticated() : authenticated
+    )
+      ? "connected"
+      : "public";
     p.repoError = results
       .flatMap((result, index) =>
         valid[index]
           ? []
           : [
-              `${labels[index]}: ${result.status === "rejected" ? result.reason?.message || "Request failed" : "Unexpected GitHub response"}`,
+              `${labels[index]}: ${result.status === "rejected" ? result.reason?.message || "Request failed" : "Unexpected repository response"}`,
             ],
       )
       .join(" ");

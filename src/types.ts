@@ -18,6 +18,7 @@ export type UpdateState = {
   channel: string;
 };
 export type SystemCheck = {
+  provider?: RepositoryProvider;
   host?: string;
   id: string;
   name: string;
@@ -82,7 +83,17 @@ export type PR = {
   draft: boolean;
   at: string;
 };
+export type RepositoryProvider = "github" | "azure" | "bitbucket";
+export type RepositoryAccount = {
+  id: string;
+  provider: RepositoryProvider;
+  host: string;
+  scope: string;
+  label: string;
+  available: boolean;
+};
 export type Project = {
+  repositoryAccount?: string;
   lastAvailability?: { url: string; kind: "website" | "health"; state: string };
   siteCheckProblem?: boolean;
   monitorKind?: "website" | "health";
@@ -167,8 +178,16 @@ export type API = {
   deleteProject: (id: string) => Promise<State>;
   refresh: () => Promise<State>;
   refreshProject: (id: string) => Promise<State>;
-  accounts: () => Promise<{ host: string; available: boolean }[]>;
-  connect: (host: string, token: string) => Promise<boolean>;
+  accounts: () => Promise<RepositoryAccount[]>;
+  connect: (
+    host: string,
+    token: string,
+    options?: {
+      provider?: RepositoryProvider;
+      username?: string;
+      label?: string;
+    },
+  ) => Promise<boolean>;
   disconnect: (host: string) => Promise<State>;
   exportData: () => Promise<boolean>;
   importData: () => Promise<State>;

@@ -41,7 +41,7 @@ sudo dnf install ./Atlas-0.1.7-linux-x86_64.rpm
 chmod +x ./Atlas-0.1.7-linux-x86_64.AppImage && ./Atlas-0.1.7-linux-x86_64.AppImage
 ```
 
-The native Linux packages declare system-library and Polkit dependencies and register Atlas in the application menu. A secure keyring is needed to save GitHub credentials. GNOME desktops may need an AppIndicator extension for tray visibility. AppImage requires a system that permits Chromium's user-namespace sandbox; native packages are preferable on systems with restrictive sandbox policies.
+The native Linux packages declare system-library and Polkit dependencies and register Atlas in the application menu. A secure keyring is needed to save repository credentials. GNOME desktops may need an AppIndicator extension for tray visibility. AppImage requires a system that permits Chromium's user-namespace sandbox; native packages are preferable on systems with restrictive sandbox policies.
 
 Package builds produce `release/SHA256SUMS.txt` via `node scripts/checksums.cjs`. Signed Windows/macOS packages need the signing setup described below. Unsigned review builds can trigger OS trust warnings.
 
@@ -64,7 +64,7 @@ npm start
 
 The launcher checks installed project packages, the Electron runtime, and the production interface when applicable. If something is missing, it lists the problem and the command or setup needed to fix it. In an interactive terminal, press Enter to check again after fixing the problem.
 
-**Git is optional.** GitHub connections use the REST API. Reading dependency inventories also works independently of locally installed Java or .NET SDKs.
+**Git is optional.** Repository connections use provider REST APIs. Reading dependency inventories also works independently of locally installed Java or .NET SDKs.
 
 For a browser design preview, run `npm run preview` and open the displayed local address. The browser preview uses labeled sample projects; use Electron for your actual workspace.
 
@@ -72,9 +72,9 @@ For a browser design preview, run `npm run preview` and open the displayed local
 
 Atlas checks its bundled runtime, local storage access, secure credential store, desktop notification support, and Git availability when the window opens. Missing capabilities appear with instructions. Click **Check again** after resolving them; expand the startup summary to review successful checks too.
 
-Required storage problems protect the saved workspace from writes until it can be loaded. Optional capabilities are identified separately: for example, an unavailable secure credential store prevents saving GitHub tokens while website monitoring and local advisory matching remain usable.
+Required storage problems protect the saved workspace from writes until it can be loaded. Optional capabilities are identified separately: for example, an unavailable secure credential store prevents saving repository tokens while website monitoring and local advisory matching remain usable.
 
-On Linux, GitHub credentials need an unlocked system keyring such as GNOME Keyring or KWallet. After changing the keyring backend, restart Atlas if the OS requires it. Desktop notification preferences are controlled by the operating system.
+On Linux, repository credentials need an unlocked system keyring such as GNOME Keyring or KWallet. After changing the keyring backend, restart Atlas if the OS requires it. Desktop notification preferences are controlled by the operating system.
 
 If Electron cannot open because of its Linux sandbox, the launcher explains the problem and offers a retry. Have your system administrator configure the Electron sandbox helper or an appropriate AppArmor policy. The application runs with sandboxing and context isolation enabled.
 
@@ -94,23 +94,35 @@ Elegant is the default on Mac. Atlas is the default on Windows and Linux. Select
 ## Add a project
 
 1. Click **Add project** and enter its name and client.
-2. Add a website URL, a GitHub repository URL, or both.
+2. Add a website URL, a repository URL, or both. GitHub.com, GitHub Enterprise, Azure DevOps Services and Bitbucket Cloud are supported.
 3. Record your contribution and technologies.
 4. Select which website, repository, vulnerability, and notification checks to enable.
 
-GitHub languages and locally parsed manifests supplement your technology list. Entering or editing a full repository URL automatically fetches repository languages and manifests from the configured GitHub host, parses them on device, and saves the detected technologies separately from your manual list. Saving starts the enabled monitoring checks immediately. Use **Refresh project** in project details to update website and repository information, refresh the dependency inventory, and recalculate CVE findings for that project. You can also scan a selected local folder. Supported manifests include npm, Composer, NuGet, Maven/Gradle, Python, Rust, Go, Ruby, and Docker. Detection uses explicit rules rather than AI, does not execute project files, and is bounded to 80 manifests (1 MB each). Unrecognized packages are not evidence that a technology is absent. Search and project/status filters apply to the overview, timeline, and pull requests.
+Repository languages (where available) and locally parsed manifests supplement your technology list. Entering or editing a full repository URL automatically fetches supported metadata and manifests from its provider, parses them on device, and saves the detected technologies separately from your manual list. Saving starts the enabled monitoring checks immediately. Use **Refresh project** in project details to update website and repository information, refresh the dependency inventory, and recalculate CVE findings for that project. You can also scan a selected local folder. Supported manifests include npm, Composer, NuGet, Maven/Gradle, Python, Rust, Go, Ruby, and Docker. Detection uses explicit rules rather than AI, does not execute project files, and is bounded to 80 manifests (1 MB each). Unrecognized packages are not evidence that a technology is absent. Search and project/status filters apply to the overview, timeline, and pull requests.
 
 Closing the window keeps Atlas running in the system tray. Use **Open Project Atlas** to restore it and **Quit** to stop monitoring. Some Linux desktops need a tray extension.
 
 Website checks run every minute; repository checks run every five minutes. Manual refresh checks immediately. Refresh controls are disabled while a sync or another operation is running; hover or focus the control for an explanation. Successful HTTP responses count as online. HTTP errors count as offline, except access restrictions such as 401/403, which are unknown. Network, VPN, DNS, and timeout failures are also shown as unknown. Desktop notifications report status transitions and newly observed pull requests after the initial snapshot.
 
-## Connect GitHub
+## Connect repository accounts
 
-A short guide beside both token fields lists the required read permissions and explains repository selection and organization approval. Connect directly from the startup checklist, or open **Settings & connections** and enter `github.com` or your GitHub Enterprise host, followed by a personal access token. Atlas verifies the token before saving it; each repository’s permissions are checked separately. For a fine-grained token, select the correct resource owner and explicitly include the private repositories you want to monitor. Each host has a separate connection. Enterprise uses the standard `/api/v3` endpoint and system certificate trust.
+A short guide beside both token fields lists the required read permissions and explains repository selection and organization approval. Connect directly from the startup checklist, or open **Settings & connections** and enter `github.com` or your GitHub Enterprise host, followed by a personal access token. Atlas verifies the token before saving it; each repository’s permissions are checked separately. Give accounts optional labels such as Work, Personal or a client name. You can save multiple accounts on the same host, including tokens for different resource owners under the same GitHub login. For a fine-grained token, select the correct resource owner and explicitly include the private repositories you want to monitor. Credentials stay scoped to their provider and host. Azure DevOps credentials are additionally scoped to an organization. Enterprise uses the standard `/api/v3` endpoint and system certificate trust.
 
 Public repositories can be monitored without a token, subject to GitHub’s anonymous API limits. The startup checklist includes optional token availability checks and host-specific **personal access token settings** links. A stored token does not guarantee repository permission.
 
-For private repositories, grant a fine-grained token access to the relevant repositories and read permissions for contents and pull requests. Organization approval may be required. Classic tokens typically need `repo` access for private repositories. GitHub requires classic tokens for outside collaborators accessing organization repositories, subject to organization policy. Atlas currently stores one token per host; a fine-grained token is limited to one resource owner.
+For private repositories, grant a fine-grained token access to the relevant repositories and read permissions for contents and pull requests. Organization approval may be required. Classic tokens typically need `repo` access for private repositories. GitHub requires classic tokens for outside collaborators accessing organization repositories, subject to organization policy. A fine-grained token is limited to one resource owner; save additional tokens to monitor repositories belonging to other owners.
+
+Atlas automatically tries matching accounts when a request is denied (including SSO, expired tokens and rate limits), remembers successful choices while running, and tries alternatives when access changes. It can use different accounts for repository sections with different permissions. Public requests are attempted without credentials after matching accounts fail. Project details show the last account used successfully. Removing an account leaves other accounts and project history intact. Existing encrypted GitHub host credentials migrate automatically when accounts are next saved; credentials never enter workspace exports.
+
+| Provider              | Repository URL                                                                                                        | Account setup                                                                                                              |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| GitHub / Enterprise   | `https://github.com/owner/repository` or your Enterprise host                                                         | Read-only Contents, Pull requests and Metadata; SSO authorization where required                                           |
+| Azure DevOps Services | `https://dev.azure.com/organization/project/_git/repository` (legacy `organization.visualstudio.com` links also work) | Organization URL and PAT with **Code (Read)**                                                                              |
+| Bitbucket Cloud       | `https://bitbucket.org/workspace/repository`                                                                          | Atlassian email and scoped API token with `read:user:bitbucket`, `read:repository:bitbucket`, `read:pullrequest:bitbucket` |
+
+Use **Repository provider** in Settings to choose the connection type. Azure and Bitbucket report recent commits as repository activity; GitHub reports repository events. Azure technologies come from manifests, while Bitbucket also provides a primary language. The view covers up to 100 open pull requests and 30 recent events/commits per check. Azure/Bitbucket responses are bounded; Bitbucket file traversal stops at 10,000 entries or eight directory levels and marks incomplete inventories rather than replacing the prior snapshot. Azure DevOps Server and Bitbucket Data Center use different APIs and are not supported.
+
+Provider setup references: [Azure DevOps personal access tokens](https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops) and [Bitbucket API tokens](https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/). Atlas requests no write permissions and never asks for identity-provider passwords.
 
 Enable **Uses SAML SSO** only for projects whose organization uses it. GitHub SSO authorization errors also identify this requirement automatically. For SAML organizations, authorize the token through GitHub's **Configure SSO** where applicable. Atlas uses the authorized token independently of your browser session. Token expiry, revocation, and organization policies still apply. See [GitHub authentication](https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api) and [SSO token authorization](https://docs.github.com/en/enterprise-cloud@latest/authentication/authenticating-with-single-sign-on/authorizing-a-personal-access-token-for-use-with-single-sign-on).
 
@@ -140,7 +152,7 @@ cms | WordPress | 6.4.0 | wordpress:wordpress
 
 The optional fourth column is an exact NVD CPE `vendor:product` mapping. CMS presets cover WordPress, Shopify, Wix, Squarespace, Joomla, Drupal, and Sanity. Replace `?` with installed versions. Plugins need their own package identity or CPE mapping. Hosted platform presets alone cannot establish version-specific coverage.
 
-Use **Import lockfile / SBOM** for npm lockfiles, NuGet `packages.lock.json`, Composer lockfiles, or SPDX/CycloneDX JSON inventories. Maven/Gradle projects can supply a resolved SBOM from their normal build pipeline. An optional daily GitHub inventory refresh discovers supported lockfiles and SBOMs while access is available. It reads up to 30 files of 10 MB each; incomplete scans retain the last snapshot and show a coverage message.
+Use **Import lockfile / SBOM** for npm lockfiles, NuGet `packages.lock.json`, Composer lockfiles, or SPDX/CycloneDX JSON inventories. Maven/Gradle projects can supply a resolved SBOM from their normal build pipeline. An optional daily repository inventory refresh discovers supported lockfiles and SBOMs while access is available. It reads up to 30 files of 10 MB each; incomplete scans retain the last snapshot and show a coverage message.
 
 The matcher handles npm semver and simple stable numeric ranges in other ecosystems. Complex qualifiers, unknown versions, and conditional NVD applicability are marked **Needs review**. Inventory accuracy matters, particularly after repository access ends.
 

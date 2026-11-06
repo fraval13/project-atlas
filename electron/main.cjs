@@ -17,7 +17,9 @@ const crypto = require("node:crypto");
 const { scanRepository, scanLocal } = require("./technologies.cjs");
 const { restoreAvailability } = require("./availability.cjs");
 const { markActivitySeen } = require("./activity.cjs");
-const { requestGithub } = require("./github.cjs");
+const { requestRepository, verifyAccount } = require("./providers.cjs");
+const { accountScope } = require("./repository.cjs");
+const { migrateAccounts, createAccounts } = require("./accounts.cjs");
 const { checkDesktop } = require("./requirements.cjs");
 const { checkWebsite, checkRepository } = require("./monitor.cjs");
 const { refreshInventory, importInventory } = require("./inventory.cjs");
@@ -40,7 +42,7 @@ let win,
   securityAttemptAt = 0,
   feedCache = { records: [] },
   state = { version: 1, projects: [], updatedAt: null },
-  secrets = {};
+  secrets = [];
 const file = (name) => path.join(app.getPath("userData"), name);
 let writes = Promise.resolve();
 async function persist() {
@@ -58,17 +60,34 @@ async function persist() {
   writes = pending;
   return pending;
 }
+const accounts = createAccounts({
+  records: () => secrets,
+  decrypt: (encrypted) =>
+    safeStorage.decryptString(Buffer.from(encrypted, "base64")),
+  request: requestRepository,
+});
 function token(host) {
-  try {
-    return secrets[host]
-      ? safeStorage.decryptString(Buffer.from(secrets[host], "base64"))
-      : "";
-  } catch {
-    return "";
-  }
+  const repo = accountScope("github", host);
+  const account = accounts.candidates(repo)[0];
+  return account ? accounts.credential(account) : "";
 }
-async function github(repo, route, project) {
-  return requestGithub(repo, route, { credential: token(repo.host), project });
+const github = accounts.request;
+let credentialWrites = Promise.resolve();
+function updateAccounts(change) {
+  const pending = credentialWrites
+    .catch(() => {})
+    .then(async () => {
+      const next = change(secrets);
+      await fs.writeFile(
+        file("credentials.tmp"),
+        JSON.stringify({ version: 2, accounts: next }),
+        { mode: 0o600 },
+      );
+      await fs.rename(file("credentials.tmp"), file("credentials.json"));
+      secrets = next;
+    });
+  credentialWrites = pending;
+  return pending;
 }
 function notify(p, body) {
   if (p.notify && Notification.isSupported())
@@ -102,7 +121,7 @@ async function poll(force = false, projectId) {
             ? checkRepository(p, {
                 github,
                 notify,
-                authenticated: !!token(repository(p.repo).host),
+                authenticated: () => !!p.repositoryAccount,
               })
             : Promise.resolve(),
         ]);
@@ -232,6 +251,7 @@ async function loadWorkspace() {
       p.usesSaml ??= !!(p.authExpiresAt || p.reauthDays);
       restoreAvailability(p);
       p.access = "disconnected";
+      p.repositoryAccount = "";
       p.status = "unknown";
       p.healthStatus = "unknown";
     }
@@ -246,7 +266,9 @@ async function loadWorkspace() {
 app.whenReady().then(async () => {
   await loadWorkspace();
   try {
-    secrets = JSON.parse(await fs.readFile(file("credentials.json"), "utf8"));
+    secrets = migrateAccounts(
+      JSON.parse(await fs.readFile(file("credentials.json"), "utf8")),
+    );
   } catch {}
   try {
     feedCache = JSON.parse(
@@ -318,14 +340,28 @@ app.whenReady().then(async () => {
         notifications: Notification,
         workspaceError,
         githubAccounts: [
-          ...new Set([
-            "github.com",
-            ...Object.keys(secrets),
-            ...state.projects
-              .filter((p) => p.repo)
-              .map((p) => repository(p.repo).host),
-          ]),
-        ].map((host) => ({ host, available: !!token(host) })),
+          ...new Map(
+            [
+              accountScope("github", "github.com"),
+              ...secrets.map((a) =>
+                accountScope(
+                  a.provider,
+                  a.provider === "azure" ? a.scope : a.host,
+                ),
+              ),
+              ...state.projects
+                .filter((p) => p.repo)
+                .map((p) => repository(p.repo)),
+            ].map((repo) => [
+              `${repo.provider}:${repo.scope}`,
+              {
+                provider: repo.provider,
+                host: repo.provider === "azure" ? repo.scope : repo.host,
+                available: accounts.candidates(repo).length > 0,
+              },
+            ]),
+          ).values(),
+        ],
       });
     })().finally(() => {
       diagnosticsTask = null;
@@ -362,6 +398,7 @@ app.whenReady().then(async () => {
         repoInitialized: sameRepo && old.repoInitialized,
         access: sameRepo ? old.access : "disconnected",
         repoError: sameRepo ? old.repoError : "",
+        repositoryAccount: sameRepo ? old.repositoryAccount : "",
         tokenExpiresAt: sameRepo ? old.tokenExpiresAt : "",
         status: sameUrl ? old.status : "unknown",
         healthStatus: sameUrl ? old.healthStatus : "unknown",
@@ -427,7 +464,7 @@ app.whenReady().then(async () => {
       ].sort();
     else
       result.warnings.push(
-        `Languages unavailable: ${languages.status === "rejected" ? languages.reason?.message || "Request failed" : "Unexpected GitHub response"}`,
+        `Languages unavailable: ${languages.status === "rejected" ? languages.reason?.message || "Request failed" : "Unexpected repository response"}`,
       );
     return result;
   });
@@ -493,15 +530,12 @@ app.whenReady().then(async () => {
       publishMonitoring();
     }
   });
-  handle("accounts", () =>
-    Object.keys(secrets).map((host) => ({ host, available: !!token(host) })),
-  );
-  handle("connect", async (host, value) => {
-    if (busy || securityBusy)
-      throw new Error("Monitoring is running. Try again shortly.");
-    const repo = repository(`https://${host}/owner/repository`);
-    if (repo.host !== host || typeof value !== "string" || !value.trim())
-      throw new Error("Enter a valid host and token.");
+  handle("accounts", () => accounts.list());
+  handle("connect", async (host, value, options = {}) => {
+    const provider = options?.provider || "github";
+    const repo = accountScope(provider, host);
+    if (typeof value !== "string" || !value.trim() || value.length > 10000)
+      throw new Error("Enter a valid access token.");
     if (
       !safeStorage.isEncryptionAvailable() ||
       (process.platform === "linux" &&
@@ -510,43 +544,56 @@ app.whenReady().then(async () => {
       throw new Error(
         "No secure OS credential store available. Unlock your system keyring and restart Atlas.",
       );
-    const account = await requestGithub(repo, "/user", {
-      credential: value.trim(),
-    });
-    if (typeof account?.login !== "string" || !account.login)
-      throw new Error(
-        "GitHub did not return a valid account. Check the GitHub host and token.",
+    const username =
+      typeof options.username === "string" ? options.username.trim() : "";
+    const identity = await verifyAccount(repo, value.trim(), username);
+    const label =
+      typeof options.label === "string" && options.label.trim()
+        ? options.label.trim().slice(0, 120)
+        : identity.label;
+    await updateAccounts((current) => {
+      const existing = current.find(
+        (a) =>
+          a.provider === provider &&
+          a.scope === repo.scope &&
+          accounts.credential(a) === value.trim(),
       );
-    if (!Object.hasOwn(secrets, host))
-      Object.defineProperty(secrets, host, {
-        value: "",
-        writable: true,
-        enumerable: true,
-        configurable: true,
-      });
-    secrets[host] = safeStorage.encryptString(value.trim()).toString("base64");
-    await fs.writeFile(file("credentials.json"), JSON.stringify(secrets), {
-      mode: 0o600,
+      const entry = {
+        id: existing?.id || crypto.randomUUID(),
+        provider,
+        host: repo.host,
+        scope: repo.scope,
+        label,
+        identity: identity.identity,
+        ...(provider === "bitbucket" ? { username } : {}),
+        encrypted: safeStorage.encryptString(value.trim()).toString("base64"),
+      };
+      return [...current.filter((a) => a.id !== entry.id), entry];
     });
     for (const p of state.projects)
-      if (p.repo && repository(p.repo).host === host) {
-        p.tokenExpiresAt = "";
-        p.access = "disconnected";
+      if (p.repo && repository(p.repo).scope === repo.scope)
         p.repoAttemptAt = null;
-      }
-    if (host === "github.com" && feedCache.ghsa) delete feedCache.ghsa.retryAt;
+    if (provider === "github" && repo.host === "github.com" && feedCache.ghsa)
+      delete feedCache.ghsa.retryAt;
     await persist();
     return true;
   });
-  handle("disconnect", async (host) => {
-    if (busy || securityBusy)
-      throw new Error("Monitoring is running. Try again shortly.");
-    delete secrets[host];
-    await fs.writeFile(file("credentials.json"), JSON.stringify(secrets), {
-      mode: 0o600,
-    });
+  handle("disconnect", async (id) => {
+    // Legacy host identifiers remain accepted for older startup clients.
+    const removed = secrets.filter(
+      (a) => a.id === id || (a.legacy && a.host === id),
+    );
+    await updateAccounts((current) =>
+      current.filter((a) => !removed.some((r) => r.id === a.id)),
+    );
     for (const p of state.projects)
-      if (p.repo && repository(p.repo).host === host) p.access = "disconnected";
+      if (p.repo && removed.some((a) => a.scope === repository(p.repo).scope)) {
+        p.repoAttemptAt = null;
+        if (removed.some((a) => a.label === p.repositoryAccount)) {
+          p.repositoryAccount = "";
+          p.access = "disconnected";
+        }
+      }
     await persist();
     return state;
   });

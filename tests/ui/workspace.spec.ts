@@ -418,9 +418,7 @@ test("repository URL detects technologies and SAML is opt-in", async ({
     .getByRole("button", { name: "Add project", exact: true })
     .first()
     .click();
-  await page
-    .getByLabel("GitHub repository")
-    .fill("https://github.com/acme/app");
+  await page.getByLabel("Repository URL").fill("https://github.com/acme/app");
   await expect(page.getByText("React · Electron · 1 manifests")).toBeVisible();
   await expect(
     page.getByLabel("Expected SAML / access expiration"),
@@ -584,13 +582,11 @@ test("repository changes automatically save detected technologies and preserve m
     .click();
   await page.getByLabel("Project name").fill("Detected project");
   await page.getByLabel("Technologies", { exact: false }).fill("Custom system");
-  await page
-    .getByLabel("GitHub repository")
-    .fill("https://github.com/acme/first");
+  await page.getByLabel("Repository URL").fill("https://github.com/acme/first");
   await expect(page.getByText("React · 1 manifests")).toBeVisible();
   await page.getByLabel("Your contribution").fill("Manual notes kept");
   await page
-    .getByLabel("GitHub repository")
+    .getByLabel("Repository URL")
     .fill("https://github.com/acme/second");
   await expect(page.getByText("Vue · Go · 1 manifests")).toBeVisible();
   await page.getByRole("button", { name: "Save project", exact: true }).click();
@@ -660,7 +656,7 @@ test("late technology scan responses cannot overwrite a newer repository", async
     .getByRole("button", { name: "Add project", exact: true })
     .first()
     .click();
-  const input = page.getByLabel("GitHub repository");
+  const input = page.getByLabel("Repository URL");
   await input.fill("https://github.com/acme/first");
   await expect
     .poll(() =>
@@ -1345,3 +1341,157 @@ test("refresh follows background sync state and explains disabled controls", asy
   await expect(refresh).toBeDisabled();
   expect(await page.evaluate(() => (window as any).refreshCalls)).toBe(1);
 });
+
+test("Settings saves multiple provider accounts and disconnects only the selected account", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    let accounts = [
+      {
+        id: "personal",
+        label: "Personal",
+        provider: "github",
+        host: "github.com",
+        scope: "https://github.com",
+        available: true,
+      },
+      {
+        id: "work",
+        label: "Work",
+        provider: "github",
+        host: "github.com",
+        scope: "https://github.com",
+        available: true,
+      },
+    ];
+    (window as any).atlas = {
+      state: async () => ({ version: 1, projects: [], updatedAt: null }),
+      accounts: async () => accounts,
+      systemCheck: async () => ({
+        checkedAt: new Date().toISOString(),
+        checks: [],
+      }),
+      connect: async (host: string, _token: string, options: any) => {
+        (window as any).connection = { host, ...options };
+        accounts.push({
+          id: options.provider,
+          label: options.label,
+          provider: options.provider,
+          host,
+          scope: host,
+          available: true,
+        });
+        return true;
+      },
+      disconnect: async (id: string) => {
+        (window as any).removed = id;
+        accounts = accounts.filter((a) => a.id !== id);
+        return { version: 1, projects: [], updatedAt: null };
+      },
+    };
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Settings & connections" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.locator(".account-list > div")).toHaveCount(2);
+  await dialog
+    .getByRole("button", { name: "Disconnect Work", exact: true })
+    .click();
+  expect(await page.evaluate(() => (window as any).removed)).toBe("work");
+  await expect(dialog.locator(".account-list")).toContainText("Personal");
+  await expect(dialog.locator(".account-list > div")).toHaveCount(1);
+  await dialog.getByLabel("Repository provider").selectOption("azure");
+  await dialog
+    .getByLabel("Azure DevOps organization URL")
+    .fill("https://dev.azure.com/acme");
+  await dialog.getByLabel("Account label (optional)").fill("Azure work");
+  await expect(
+    dialog.getByRole("complementary", {
+      name: "Azure DevOps token setup guide",
+    }),
+  ).toContainText("Code (Read)");
+  await dialog
+    .getByLabel("Personal access token", { exact: true })
+    .fill("test-token");
+  await dialog
+    .getByRole("button", { name: "Save connection", exact: true })
+    .click();
+  await expect(dialog.locator(".account-list > div")).toHaveCount(2);
+  expect(await page.evaluate(() => (window as any).connection)).toEqual({
+    host: "https://dev.azure.com/acme",
+    provider: "azure",
+    username: "",
+    label: "Azure work",
+  });
+  await dialog.getByLabel("Repository provider").selectOption("bitbucket");
+  await dialog.getByLabel("Atlassian account email").fill("me@example.com");
+  await dialog.getByLabel("Account label (optional)").fill("Bitbucket work");
+  await expect(
+    dialog.getByRole("complementary", { name: "Bitbucket token setup guide" }),
+  ).toContainText("read:pullrequest:bitbucket");
+  await dialog
+    .getByLabel("Personal access token", { exact: true })
+    .fill("test-token");
+  await dialog
+    .getByRole("button", { name: "Save connection", exact: true })
+    .click();
+  await expect(dialog.locator(".account-list > div")).toHaveCount(3);
+  expect(await page.evaluate(() => (window as any).connection)).toEqual({
+    host: "bitbucket.org",
+    provider: "bitbucket",
+    username: "me@example.com",
+    label: "Bitbucket work",
+  });
+});
+
+for (const [provider, url] of [
+  ["Azure DevOps", "https://dev.azure.com/acme/project/_git/app"],
+  ["Bitbucket", "https://bitbucket.org/team/app"],
+])
+  test(`${provider} project shows provider, selected account and automatic technology scan`, async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      ({ url }) => {
+        const project = {
+          id: "one",
+          name: "Provider project",
+          client: "",
+          repo: url,
+          url: "",
+          technologies: [],
+          events: [],
+          prs: [],
+          watchRepo: true,
+          status: "unknown",
+          access: "connected",
+          repositoryAccount: "Client account",
+        };
+        (window as any).atlas = {
+          state: async () => ({
+            version: 1,
+            projects: [project],
+            updatedAt: null,
+          }),
+          scanRepositoryTechnologies: async (repo: string) => {
+            (window as any).scanned = repo;
+            return { technologies: ["React"], examined: 1, warnings: [] };
+          },
+        };
+      },
+      { url },
+    );
+    await page.goto("/");
+    await expect(page.locator(".project-card")).toContainText(
+      `${provider}: Monitoring repository`,
+    );
+    await page.locator(".project-title").click();
+    await expect(page.getByRole("dialog")).toContainText("Client account");
+    await page
+      .getByRole("button", { name: "Edit project & monitoring" })
+      .click();
+    await expect
+      .poll(() => page.evaluate(() => (window as any).scanned))
+      .toBe(url);
+    await expect(page.getByRole("dialog")).toContainText("React");
+  });

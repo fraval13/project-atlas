@@ -1,17 +1,21 @@
 import { useState } from "react";
 import { ExternalLink, KeyRound, Loader2 } from "lucide-react";
-import { GitHubTokenGuide } from "./GitHubTokenGuide";
-import type { API } from "./types";
+import { RepositoryTokenGuide } from "./RepositoryTokenGuide";
+import { tokenSettings } from "./repository";
+import type { API, RepositoryProvider } from "./types";
 
 export function GitHubAccessCheck({
   api,
   host,
+  provider = "github",
   saved,
 }: {
   api: API;
   host: string;
+  provider?: RepositoryProvider;
   saved: () => Promise<void>;
 }) {
+  const [email, setEmail] = useState("");
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -23,7 +27,7 @@ export function GitHubAccessCheck({
         setBusy(true);
         setError("");
         try {
-          await api.connect(host, token);
+          await api.connect(host, token, { provider, username: email });
           setToken("");
           await saved();
         } catch (e) {
@@ -40,15 +44,25 @@ export function GitHubAccessCheck({
         className="text-button"
         onClick={() =>
           void api
-            .openExternal(
-              `https://${host}/settings/${host === "github.com" ? "personal-access-tokens" : "tokens"}`,
-            )
+            .openExternal(tokenSettings(provider, host))
             .catch(() => setError("Could not open token settings."))
         }
       >
         Open personal access token settings <ExternalLink size={13} />
       </button>
-      <GitHubTokenGuide />
+      <RepositoryTokenGuide provider={provider} />
+      {provider === "bitbucket" && (
+        <label>
+          Atlassian account email
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="off"
+            required
+          />
+        </label>
+      )}
       <div className="startup-token-controls">
         <label className="startup-token-field">
           Personal access token for {host}

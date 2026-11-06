@@ -124,7 +124,7 @@ export function InventoryEditor({
               checked={project.autoInventory !== false}
               onChange={(e) => change({ autoInventory: e.target.checked })}
             />
-            Refresh supported lockfiles and SBOMs from GitHub daily
+            Refresh supported lockfiles and SBOMs from the repository daily
           </label>
         )}
       </div>

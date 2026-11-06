@@ -2269,3 +2269,14 @@ h3 {
 .project-action-menu > .refresh-control > button {
   width: 100%;
 }
+
+.account-list > div {
+  gap: 12px;
+}
+.account-list > div > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.account-list > div > button {
+  flex-shrink: 0;
+}

@@ -106,7 +106,7 @@ async function checkDesktop({
     required: false,
     detail: secure
       ? "OS-backed credential encryption is available."
-      : "GitHub credentials cannot be saved securely. Website monitoring and local CVE matching still work.",
+      : "Repository credentials cannot be saved securely. Website monitoring and local CVE matching still work.",
     remedy:
       "Enable and unlock your OS keyring (for example GNOME Keyring or KWallet on Linux). If the backend changed, restart Atlas and check again.",
   });
@@ -127,11 +127,12 @@ async function checkDesktop({
   });
   for (const account of githubAccounts)
     checks.push({
-      id: `github:${account.host}`,
-      name: `GitHub access · ${account.host}`,
+      id: `${account.provider || "github"}:${account.host}`,
+      name: `${{ github: "GitHub", azure: "Azure DevOps", bitbucket: "Bitbucket" }[account.provider || "github"]} access · ${account.host}`,
       status: account.available ? "ready" : "missing",
       required: false,
       host: account.host,
+      provider: account.provider || "github",
       detail: account.available
         ? "Token stored securely. Repository permissions and SSO are verified when monitoring runs."
         : "No usable token stored. Public repositories can be monitored anonymously; private repositories require access.",
@@ -146,7 +147,7 @@ async function checkDesktop({
     required: false,
     detail: git.ok
       ? `${git.version} · optional tool`
-      : "Optional: GitHub connections use the API and do not require Git.",
+      : "Optional: Repository connections use the API and do not require Git.",
     remedy:
       "Install Git and ensure it is on PATH if you want to use local Git tooling, then check again.",
   });
@@ -248,7 +249,7 @@ async function checkDevelopment({
     status: git.ok ? "ready" : "missing",
     detail: git.ok
       ? git.version
-      : "Not installed. GitHub API connections still work.",
+      : "Not installed. Repository API connections still work.",
     remedy: "Install Git and add it to PATH for local Git tooling.",
   });
   return { checkedAt: new Date().toISOString(), checks, executable };

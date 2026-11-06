@@ -8,29 +8,7 @@ function webUrl(value, optional = false) {
   return u.href;
 }
 function repository(value) {
-  if (!value) return null;
-  const u = new URL(webUrl(value));
-  if (u.protocol !== "https:")
-    throw new Error("Repository connections require HTTPS.");
-  if (u.search || u.hash)
-    throw new Error(
-      "Repository URLs must not contain query parameters or fragments.",
-    );
-  const parts = u.pathname
-    .replace(/\/+$/, "")
-    .replace(/\.git$/, "")
-    .split("/")
-    .filter(Boolean);
-  if (parts.length !== 2 || !parts.every((x) => /^[\w.-]+$/.test(x)))
-    throw new Error(
-      "Use a repository URL such as https://github.com/owner/repository.",
-    );
-  return {
-    host: u.host,
-    path: parts.join("/"),
-    api:
-      u.host === "github.com" ? "https://api.github.com" : `${u.origin}/api/v3`,
-  };
+  return value ? require("./repository.cjs").parseRepository(value) : null;
 }
 function project(input) {
   if (!input || typeof input.name !== "string" || !input.name.trim())

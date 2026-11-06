@@ -34,13 +34,20 @@ import {
   Wifi,
   X,
 } from "lucide-react";
-import type { API, Project, State } from "./types";
+import type {
+  API,
+  Project,
+  State,
+  RepositoryAccount,
+  RepositoryProvider,
+} from "./types";
 import { demo } from "./demo";
 import { expiration, toLocalInput } from "./expiry";
 import { InventoryEditor, ProjectSecurity, SecurityOverview } from "./Security";
 import { UpdateBanner } from "./UpdateBanner";
 import { useActivityRead } from "./useActivityRead";
-import { GitHubTokenGuide } from "./GitHubTokenGuide";
+import { RepositoryTokenGuide } from "./RepositoryTokenGuide";
+import { providerFor, providerNames, tokenSettings } from "./repository";
 import { ProjectActions } from "./ProjectActions";
 import { availabilityLabel } from "./availability";
 import { TechnologyBadge } from "./TechnologyBadge";
@@ -104,9 +111,10 @@ function App() {
     [monitoring, setMonitoring] = useState(false),
     [error, setError] = useState(""),
     [toast, setToast] = useState(""),
-    [accounts, setAccounts] = useState<{ host: string; available: boolean }[]>(
-      [],
-    ),
+    [accounts, setAccounts] = useState<RepositoryAccount[]>([]),
+    [provider, setProvider] = useState<RepositoryProvider>("github"),
+    [accountLabel, setAccountLabel] = useState(""),
+    [accountEmail, setAccountEmail] = useState(""),
     [host, setHost] = useState("github.com"),
     [credential, setCredential] = useState("");
   useEffect(() => {
@@ -766,7 +774,7 @@ function App() {
                     )}{" "}
                     {p.repo && (
                       <p className="muted">
-                        GitHub:{" "}
+                        {providerNames[providerFor(p.repo)]}:{" "}
                         {!p.watchRepo
                           ? "Paused"
                           : p.access === "connected" || p.access === "public"
@@ -840,7 +848,7 @@ function App() {
                   <p>
                     {shown.projects.length
                       ? "Try a different search or filter."
-                      : "Add a website, a GitHub repository, or both. Keep the story of your work in one place."}
+                      : "Add a website, a repository, or both. Keep the story of your work in one place."}
                   </p>
                   {shown.projects.length ? (
                     <button
@@ -1091,7 +1099,7 @@ function App() {
               )}
               {selected.repo && (
                 <p>
-                  GitHub:{" "}
+                  {providerNames[providerFor(selected.repo)]}:{" "}
                   {!selected.watchRepo
                     ? "Monitoring paused"
                     : selected.access === "connected" ||
@@ -1155,9 +1163,11 @@ function App() {
                   <button
                     className="text-button"
                     onClick={() => {
-                      const target = new URL(selected.repo);
                       open(
-                        `${target.origin}/settings/${target.host === "github.com" ? "personal-access-tokens" : "tokens"}`,
+                        tokenSettings(
+                          providerFor(selected.repo),
+                          selected.repo,
+                        ),
                       );
                     }}
                   >
@@ -1172,6 +1182,13 @@ function App() {
                   Authentication & reauthentication
                 </h3>
                 <dl>
+                  <dt>Last used account</dt>
+                  <dd>
+                    {selected.repositoryAccount ||
+                      (selected.access === "public"
+                        ? "Public access"
+                        : "Awaiting authenticated access")}
+                  </dd>
                   <dt>Access</dt>
                   <dd>
                     {selected.access === "connected"
@@ -1356,8 +1373,8 @@ function App() {
                   />
                 </label>
                 <label>
-                  GitHub repository{" "}
-                  <span>optional · GitHub.com or Enterprise</span>
+                  Repository URL{" "}
+                  <span>optional · GitHub, Azure DevOps or Bitbucket</span>
                   <input
                     type="url"
                     value={editing.repo || ""}
@@ -1372,9 +1389,10 @@ function App() {
                   />
                 </label>
                 <p className="repository-url-help">
-                  Use the repository main page, for example
-                  https://github.com/fraval13/project-atlas or
-                  https://github.company.com/team/project.
+                  Use the repository main page, for example GitHub.com or
+                  Enterprise: https://github.com/owner/repository. Azure DevOps:
+                  https://dev.azure.com/organization/project/_git/repository.
+                  Bitbucket Cloud: https://bitbucket.org/workspace/repository.
                 </p>
                 <TechnologyScan
                   api={preview ? undefined : api}
@@ -1401,7 +1419,8 @@ function App() {
                 <label>
                   Technologies{" "}
                   <span>
-                    comma separated · GitHub languages are added automatically
+                    comma separated · detected technologies are added
+                    automatically
                   </span>
                   <input
                     value={editing.technologies?.join(",") || ""}
@@ -1582,21 +1601,18 @@ function App() {
                 <StartupChecks api={api} settings />
                 <UpdateBanner api={api} settings />
                 <p className="settings-intro">
-                  Connect each GitHub host with a personal access token.
-                  Credentials are encrypted with your system keyring and never
-                  included in exports.
+                  Add multiple accounts for GitHub, Azure DevOps or Bitbucket.
+                  Atlas automatically tries saved accounts with access to each
+                  repository. Credentials are encrypted with your system keyring
+                  and never included in exports.
                 </p>
                 <button
                   className="text-button"
                   onClick={() => {
                     try {
-                      const target = new URL(`https://${host}`);
-                      if (target.host !== host) throw new Error();
-                      open(
-                        `${target.origin}/settings/${target.host === "github.com" ? "personal-access-tokens" : "tokens"}`,
-                      );
+                      open(tokenSettings(provider, host));
                     } catch {
-                      setError("Enter a valid GitHub host first.");
+                      setError("Enter a valid host or organization URL first.");
                     }
                   }}
                 >
@@ -1607,8 +1623,14 @@ function App() {
                     e.preventDefault();
                     if (requireLive())
                       run(async () => {
-                        await api!.connect(host, credential);
+                        await api!.connect(host, credential, {
+                          provider,
+                          username: accountEmail,
+                          label: accountLabel,
+                        });
                         setCredential("");
+                        setAccountLabel("");
+                        setAccountEmail("");
                         setAccounts(await api!.accounts());
                         setToast(
                           "Token verified and saved. Refresh a project to check its repository permissions.",
@@ -1617,14 +1639,68 @@ function App() {
                   }}
                 >
                   <label>
-                    GitHub host
+                    Repository provider
+                    <select
+                      value={provider}
+                      onChange={(e) => {
+                        const next = e.target.value as RepositoryProvider;
+                        setProvider(next);
+                        setHost(
+                          next === "github"
+                            ? "github.com"
+                            : next === "azure"
+                              ? "https://dev.azure.com/"
+                              : "bitbucket.org",
+                        );
+                        setCredential("");
+                        setAccountEmail("");
+                      }}
+                    >
+                      <option value="github">GitHub</option>
+                      <option value="azure">Azure DevOps</option>
+                      <option value="bitbucket">Bitbucket</option>
+                    </select>
+                  </label>
+                  <label>
+                    {provider === "azure"
+                      ? "Azure DevOps organization URL"
+                      : provider === "github"
+                        ? "GitHub host"
+                        : "Bitbucket host"}
                     <input
                       value={host}
                       onChange={(e) => setHost(e.target.value)}
-                      placeholder="github.com or github.company.com"
+                      readOnly={provider === "bitbucket"}
+                      placeholder={
+                        provider === "azure"
+                          ? "https://dev.azure.com/your-organization"
+                          : "github.com or github.company.com"
+                      }
+                      required
                     />
                   </label>
-                  <GitHubTokenGuide />
+                  <label>
+                    Account label (optional)
+                    <input
+                      value={accountLabel}
+                      onChange={(e) => setAccountLabel(e.target.value)}
+                      placeholder="Work, personal, or client name"
+                      maxLength={120}
+                    />
+                  </label>
+                  {provider === "bitbucket" && (
+                    <label>
+                      Atlassian account email
+                      <input
+                        type="email"
+                        value={accountEmail}
+                        onChange={(e) => setAccountEmail(e.target.value)}
+                        autoComplete="off"
+                        required
+                      />
+                    </label>
+                  )}
+                  <RepositoryTokenGuide provider={provider} />
                   <label>
                     Personal access token
                     <input
@@ -1662,10 +1738,12 @@ function App() {
                 </div>
                 <div className="account-list">
                   {accounts.map((a) => (
-                    <div key={a.host}>
+                    <div key={a.id || a.host}>
                       <span>
                         <i className="connection-dot" />
-                        {a.host}
+                        {a.label || a.host} ·{" "}
+                        {providerNames[a.provider || "github"]}
+                        <small>{a.scope || a.host}</small>
                         <small>
                           {a.available
                             ? "Credential stored securely"
@@ -1676,10 +1754,12 @@ function App() {
                         className="secondary"
                         onClick={() =>
                           run(async () => {
-                            setState(await api!.disconnect(a.host));
+                            setState(await api!.disconnect(a.id || a.host));
                             setAccounts(await api!.accounts());
                           })
                         }
+                        disabled={loading}
+                        aria-label={`Disconnect ${a.label || a.host}`}
                       >
                         Disconnect
                       </button>

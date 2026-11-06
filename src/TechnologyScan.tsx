@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { providerFor } from "./repository";
 import type { API, TechnologyScan as Scan } from "./types";
 export function TechnologyScan({
   api,
@@ -28,7 +29,9 @@ export function TechnologyScan({
         url.password ||
         url.search ||
         url.hash ||
-        url.pathname.split("/").filter(Boolean).length !== 2
+        (providerFor(repo) === "azure"
+          ? !/\/[^/]+\/_git\/[^/]+\/?$/.test(url.pathname)
+          : url.pathname.split("/").filter(Boolean).length !== 2)
       )
         return;
     } catch {
@@ -63,8 +66,8 @@ export function TechnologyScan({
     <div className="info-box">
       <b>Technology detection</b>
       <p>
-        GitHub technologies are detected automatically when you enter or change
-        a full repository URL. Files are fetched from that GitHub host and
+        Technologies are detected automatically when you enter or change a full
+        repository URL. Files are fetched from the repository provider and
         parsed on this device.
       </p>
       {message && <p role="status">{message}</p>}

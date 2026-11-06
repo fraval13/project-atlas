@@ -143,6 +143,7 @@ export function StartupChecks({
                   <GitHubAccessCheck
                     api={api}
                     host={check.host}
+                    provider={check.provider}
                     saved={() => refresh()}
                   />
                 )}

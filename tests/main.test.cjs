@@ -109,14 +109,15 @@ test("desktop bridge persists notes/inventory, excludes credentials, rejects for
   const feedCredentials = [];
   Module._load = function (request, ...args) {
     if (
-      request === "./github.cjs" &&
+      request === "./providers.cjs" &&
       args[0]?.filename === path.resolve(__dirname, "../electron/main.cjs")
     )
       return {
-        requestGithub: async (_repo, _route, options) => {
-          if (options.credential === "invalid-token")
+        ...originalLoad.call(this, request, ...args),
+        verifyAccount: async (_repo, value) => {
+          if (value === "invalid-token")
             throw new Error("GitHub token is invalid");
-          return { login: "test-account" };
+          return { label: "test-account", identity: "test-account" };
         },
       };
     if (
@@ -158,6 +159,15 @@ test("desktop bridge persists notes/inventory, excludes credentials, rejects for
     return timers.length;
   };
   try {
+    await fs.writeFile(
+      path.join(directory, "credentials.json"),
+      JSON.stringify({
+        "enterprise.example": Buffer.from(
+          "encrypted:" +
+            Buffer.from("legacy-enterprise-token").toString("base64"),
+        ).toString("base64"),
+      }),
+    );
     require("../electron/main.cjs");
     await startup;
     // Allow the initial empty-workspace atomic write to finish.
@@ -187,6 +197,9 @@ test("desktop bridge persists notes/inventory, excludes credentials, rejects for
       inventoryText: "nuget | Sample.Package | 1.0.0",
     });
     assert.equal(state.projects[0].inventory[0].ecosystem, "nuget");
+    const migrated = await invoke("accounts");
+    assert.equal(migrated[0].host, "enterprise.example");
+    assert.equal(migrated[0].available, true);
     await invoke("connect", "github.com", "super-secret-token");
     const credentials = await fs.readFile(
       path.join(directory, "credentials.json"),
@@ -200,6 +213,23 @@ test("desktop bridge persists notes/inventory, excludes credentials, rejects for
     assert.equal(
       await fs.readFile(path.join(directory, "credentials.json"), "utf8"),
       credentials,
+    );
+    assert.equal(JSON.parse(credentials).version, 2);
+    assert.equal(JSON.parse(credentials).accounts.length, 2);
+    await invoke("connect", "github.com", "second-token", {
+      provider: "github",
+      label: "Second account",
+    });
+    const multiple = await invoke("accounts");
+    assert.equal(multiple.length, 3);
+    const second = multiple.find((a) => a.label === "Second account");
+    await invoke("disconnect", second.id);
+    assert.equal((await invoke("accounts")).length, 2);
+    assert.ok(
+      (await invoke("accounts")).some((a) => a.label === "test-account"),
+    );
+    assert.ok(
+      (await invoke("accounts")).some((a) => a.host === "enterprise.example"),
     );
     await invoke("exportData");
     const exported = await fs.readFile(
@@ -288,7 +318,8 @@ test("desktop bridge persists notes/inventory, excludes credentials, rejects for
     ]);
     assert.equal(state.projects[0].events[0].seen, true);
     assert.equal(state.projects[0].events[1].seen, false);
-    await invoke("disconnect", "github.com");
+    for (const account of await invoke("accounts"))
+      await invoke("disconnect", account.id);
     assert.deepEqual(await invoke("accounts"), []);
     const persisted = JSON.parse(
       await fs.readFile(path.join(directory, "projects.json"), "utf8"),

@@ -192,7 +192,9 @@ async function scanRepository(repo, github, project) {
     return Buffer.from(data.content, "base64").toString("utf8");
   });
   if (tree.truncated)
-    result.warnings.push("GitHub returned a partial file list.");
+    result.warnings.push(
+      "The repository provider returned a partial file list.",
+    );
   return result;
 }
 async function scanLocal(directory) {
